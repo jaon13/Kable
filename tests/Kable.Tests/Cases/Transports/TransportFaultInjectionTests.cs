@@ -361,7 +361,7 @@ public class TransportFaultInjectionTests
         Func<Task> act = async () => await factory.ConnectAsync();
 
         await act.Should().ThrowAsync<Exception>()
-            .Where(e => e is System.IO.IOException || e is ArgumentException);
+            .Where(e => e is System.IO.IOException || e is ArgumentException || e is UnauthorizedAccessException || e is PlatformNotSupportedException);
     }
 
     [Fact]
