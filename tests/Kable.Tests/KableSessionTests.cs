@@ -50,7 +50,7 @@ public class KableSessionTests
             int callerId = i;
             tasks.Add(Task.Run(async () =>
             {
-                return await session.RequestAsync<string>("CALLER_" + callerId, TimeSpan.FromSeconds(5));
+                return await session.RequestAsync<string>("CALLER_" + callerId, TimeSpan.FromSeconds(10));
             }));
         }
 

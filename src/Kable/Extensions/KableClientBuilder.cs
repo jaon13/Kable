@@ -31,6 +31,12 @@ public sealed class KableClientBuilder<TMessage>
         return this;
     }
 
+    public KableClientBuilder<TMessage> UseNamedPipe(string pipeName, string serverName = ".", int timeoutMs = 5000)
+    {
+        _factory = new NamedPipeConnectionFactory(pipeName, serverName, timeoutMs);
+        return this;
+    }
+
     public KableClientBuilder<TMessage> UseConnectionFactory(IConnectionFactory factory)
     {
         _factory = factory;
