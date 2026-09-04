@@ -1,6 +1,7 @@
 namespace Kable.Tests;
 
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using FluentAssertions;
@@ -54,14 +55,29 @@ public class KableSessionTests
             }));
         }
 
-
-        for (int i = 0; i < callerCount; i++)
+        // 에코 서버: 클라이언트가 보낸 명령 1건을 읽을 때마다 즉시 1:1로 정확히 응답 라인을 써줌
+        var serverEchoTask = Task.Run(async () =>
         {
-            await Task.Delay(20);
-            await factory.Context ?.WriteAsciiLineAsync("RESP_ACK_" + i, 0x0A);
-        }
+            var reader = factory.Context!.RemoteRead;
+            for (int i = 0; i < callerCount; i++)
+            {
+                var result = await reader.ReadAsync();
+                var buffer = result.Buffer;
+                var position = buffer.PositionOf((byte)0x0A);
+                while (position == null)
+                {
+                    reader.AdvanceTo(buffer.Start, buffer.End);
+                    result = await reader.ReadAsync();
+                    buffer = result.Buffer;
+                    position = buffer.PositionOf((byte)0x0A);
+                }
+                reader.AdvanceTo(buffer.GetPosition(1, position.Value));
+                await factory.Context.WriteAsciiLineAsync("RESP_ACK_" + i, 0x0A);
+            }
+        });
 
         var results = await Task.WhenAll(tasks);
+        await serverEchoTask;
         results.Length.Should().Be(callerCount);
         results.Should().OnlyHaveUniqueItems();
     }
