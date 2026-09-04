@@ -24,7 +24,8 @@
 | **03** | [03_CODEC_TEST_SPEC.md](file:///d:/Johnny/Kable/docs/qa_test_engineering/03_CODEC_TEST_SPEC.md) | Layer 2: Codecs | AsciiLineCodec, 다중 세그먼트 파편화, 제어문자 경계, 바이너리 프레이밍 | **완료** |
 | **04** | [04_ENGINE_TEST_SPEC.md](file:///d:/Johnny/Kable/docs/qa_test_engineering/04_ENGINE_TEST_SPEC.md) | Layer 3: Engine | Hybrid Routing, FIFO 동시성, Backpressure, 링버퍼, OOB 긴급 명령 | **완료** |
 | **05** | [05_SOURCE_GENERATOR_TEST_SPEC.md](file:///d:/Johnny/Kable/docs/qa_test_engineering/05_SOURCE_GENERATOR_TEST_SPEC.md) | Roslyn Generators | Roslyn 컴파일 타임 구문 분석, 이스케이프 포맷, 특수 타입 직렬화 | **완료** |
-| **06** | [06_OBSERVABILITY_TEST_SPEC.md](file:///d:/Johnny/Kable/docs/qa_test_engineering/06_OBSERVABILITY_TEST_SPEC.md) | Observability & Logging | LogLevel 표준 매트릭스, CATCH 블록 원인 추적, 외부 로거 무의존 브릿지 | **신규 완료** |
+| **06** | [06_OBSERVABILITY_TEST_SPEC.md](file:///d:/Johnny/Kable/docs/qa_test_engineering/06_OBSERVABILITY_TEST_SPEC.md) | Observability & Logging | LogLevel 표준 매트릭스, CATCH 블록 원인 추적, 외부 로거 무의존 브릿지 | **완료** |
+| **07** | [07_OBSERVABILITY_CASES_TEST_SPEC.md](file:///d:/Johnny/Kable/docs/qa_test_engineering/07_OBSERVABILITY_CASES_TEST_SPEC.md) | Observability Detailed Cases | 채널 격리 신뢰성, 정상 정지 시 오경보 방지, Tx Flush 오류 전파 상세 테스트 케이스 | **신규 완료** |
 
 ---
 

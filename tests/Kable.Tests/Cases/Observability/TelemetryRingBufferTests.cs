@@ -215,4 +215,102 @@ public class TelemetryRingBufferTests
         // Verify session can still be stopped cleanly
         await session.StopAsync();
     }
+
+    [Fact]
+    public void TC_OBS_201_CommObserver_TelemetryBufferSaturation_MaintainsZeroLossInAlarmAndCommandStreams()
+    {
+        var observer = new CommObserver(bufferCapacity: 10);
+
+        // Inject 100 periodic telemetry items to trigger DropOldest buffer saturation
+        for (int i = 0; i < 100; i++)
+        {
+            observer.OnPacketTrace(new PacketTraceRecord(
+                DateTime.UtcNow,
+                PacketDirection.Rx,
+                TrafficKind.PeriodicTelemetry,
+                "SENSOR_STREAM",
+                ReadOnlyMemory<byte>.Empty,
+                $"DATA_{i}",
+                TimeSpan.Zero,
+                LogLevel.Trace));
+        }
+
+        // Inject critical alarm and command
+        observer.OnPacketTrace(new PacketTraceRecord(
+            DateTime.UtcNow,
+            PacketDirection.Rx,
+            TrafficKind.SpontaneousAlarm,
+            "CRITICAL_INTERLOCK",
+            ReadOnlyMemory<byte>.Empty,
+            "ALARM_FIRE_DETECTED",
+            TimeSpan.Zero,
+            LogLevel.Critical));
+
+        observer.OnPacketTrace(new PacketTraceRecord(
+            DateTime.UtcNow,
+            PacketDirection.Tx,
+            TrafficKind.AperiodicCommand,
+            "CMD_SHUTDOWN",
+            ReadOnlyMemory<byte>.Empty,
+            "STOP_ALL",
+            TimeSpan.Zero,
+            LogLevel.Debug));
+
+        // PeriodicStream must contain exactly latest 10 items
+        int telemetryCount = 0;
+        while (observer.PeriodicStream.TryRead(out _)) telemetryCount++;
+        telemetryCount.Should().Be(10);
+
+        // AlarmStream and CommandStream must be intact and non-lossy
+        observer.AlarmStream.TryRead(out var alarm).Should().BeTrue();
+        alarm.ParsedText.Should().Be("ALARM_FIRE_DETECTED");
+        alarm.Level.Should().Be(LogLevel.Critical);
+
+        observer.CommandStream.TryRead(out var cmd).Should().BeTrue();
+        cmd.ParsedText.Should().Be("STOP_ALL");
+    }
+
+    [Fact]
+    public async Task TC_OBS_202_KableSession_CleanShutdown_DoesNotEmitFalseErrorAlerts()
+    {
+        var mockObserver = Substitute.For<ICommObserver>();
+        var factory = new TestMemoryConnectionFactory();
+        var codec = new AsciiLineCodec(delimiter: 0x0A);
+        var session = new KableSession<string>(factory, codec, mockObserver);
+
+        await session.StartAsync();
+        await Task.Delay(50);
+
+        // Clean graceful shutdown
+        await session.StopAsync();
+
+        // Must not emit false-alarm error logs during cooperative cancellation
+        mockObserver.DidNotReceive().OnPacketTrace(Arg.Is<PacketTraceRecord>(r =>
+            r.Level == LogLevel.Error ||
+            r.Tag == "READ_LOOP_FAULT" ||
+            r.Tag == "DISPATCH_LOOP_FAULT"));
+    }
+
+    [Fact]
+    public async Task TC_OBS_203_KableSession_TxFlushFailure_EmitsErrorRecordAndPropagatesFailFast()
+    {
+        var mockObserver = Substitute.For<ICommObserver>();
+        var factory = new TestMemoryConnectionFactory();
+        var codec = new AsciiLineCodec(delimiter: 0x0A);
+        await using var session = new KableSession<string>(factory, codec, mockObserver);
+        await session.StartAsync();
+
+        // Abruptly fail the writer end
+        factory.Context.RemoteRead.Complete(new System.IO.IOException("Hardware cable detached during flush"));
+
+        Func<Task> act = async () => await session.RequestAsync<string>("TEST_REQ", TimeSpan.FromSeconds(2));
+
+        await act.Should().ThrowAsync<DeviceDisconnectedException>();
+
+        mockObserver.Received().OnPacketTrace(Arg.Is<PacketTraceRecord>(r =>
+            r.Level == LogLevel.Error &&
+            r.Tag == "IO_FLUSH_ERROR" &&
+            r.Kind == TrafficKind.SpontaneousAlarm));
+    }
 }
+
