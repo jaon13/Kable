@@ -105,7 +105,7 @@ public sealed class KableSession<TMessage> : IDeviceSession<TMessage>
                 catch (Exception ex) when (ex is System.IO.IOException or System.Net.Sockets.SocketException)
                 {
                     OnConnectionClosed();
-                    throw new DeviceDisconnectedException("데이터 송신 중 하드웨어 연결이 끊어졌습니다.", ex);
+                    throw new DeviceDisconnectedException("Hardware connection was lost during data transmission.", ex);
                 }
 
                 using var timeoutCts = new CancellationTokenSource(timeout);
@@ -155,7 +155,7 @@ public sealed class KableSession<TMessage> : IDeviceSession<TMessage>
                 catch (Exception ex) when (ex is System.IO.IOException or System.Net.Sockets.SocketException)
                 {
                     OnConnectionClosed();
-                    throw new DeviceDisconnectedException("데이터 송신 중 하드웨어 연결이 끊어졌습니다.", ex);
+                    throw new DeviceDisconnectedException("Hardware connection was lost during data transmission.", ex);
                 }
 
                 using var timeoutCts = new CancellationTokenSource(timeout);
@@ -203,7 +203,7 @@ public sealed class KableSession<TMessage> : IDeviceSession<TMessage>
 
                 while (_codec.TryDecode(ref buffer, out var message))
                 {
-                    // I/O 루프를 지연시키지 않고 전용 디스패치 큐에 비차단 우선 적재
+                    // Non-blocking priority enqueue into dedicated dispatch queue without stalling I/O pump
                     if (!_dispatchQueue.Writer.TryWrite(message))
                     {
                         await _dispatchQueue.Writer.WriteAsync(message, _sessionCts.Token).ConfigureAwait(false);
@@ -216,7 +216,7 @@ public sealed class KableSession<TMessage> : IDeviceSession<TMessage>
         }
         catch
         {
-            // 단선 또는 예외 감지 시 루프 종료
+            // Terminate loop on disconnection or stream exception
         }
         finally
         {
@@ -240,11 +240,11 @@ public sealed class KableSession<TMessage> : IDeviceSession<TMessage>
         }
         catch (OperationCanceledException)
         {
-            // 세션 종료 신호 시 잔여 큐 패킷 즉시 드레인 처리
+            // Immediate drain on session termination signal
         }
         finally
         {
-            // 잔여 인플라이트 패킷 드레인
+            // Drain remaining in-flight packets
             while (reader.TryRead(out var residualMessage))
             {
                 DispatchMessage(residualMessage);
@@ -281,7 +281,7 @@ public sealed class KableSession<TMessage> : IDeviceSession<TMessage>
             }
         }
 
-        // 응답 대기자가 없으면 일반 스트림 채널로 발행
+        // Publish to incoming stream channel if no request is awaiting response
         _incomingStream.Writer.TryWrite(message);
     }
 
@@ -289,7 +289,7 @@ public sealed class KableSession<TMessage> : IDeviceSession<TMessage>
     {
         if (Interlocked.Exchange(ref _isConnected, 0) == 1)
         {
-            var ex = new DeviceDisconnectedException("하드웨어 연결이 단절되었습니다. (Fail-Fast 정책으로 모든 요청 즉각 취소)");
+            var ex = new DeviceDisconnectedException("Hardware connection has been disconnected. (Fail-fast aborting all pending requests)");
             _currentFifoTcs?.TrySetException(ex);
             foreach (var kvp in _pendingRequests)
             {
@@ -304,7 +304,7 @@ public sealed class KableSession<TMessage> : IDeviceSession<TMessage>
     {
         if (Volatile.Read(ref _isConnected) == 0 || _context == null)
         {
-            throw new DeviceDisconnectedException("연결이 열려 있지 않습니다. StartAsync()를 먼저 호출하세요.");
+            throw new DeviceDisconnectedException("Connection is not open. Call StartAsync() first.");
         }
     }
 
@@ -313,7 +313,7 @@ public sealed class KableSession<TMessage> : IDeviceSession<TMessage>
         _sessionCts.Cancel();
         OnConnectionClosed();
 
-        // Graceful Join: I/O 펌프 및 디스패치 루프가 정리될 때까지 최대 2초 안전 대기
+        // Graceful Join: wait up to 2 seconds for I/O pump and dispatch loop to complete
         var tasksToWait = new List<Task>();
         if (_readLoopTask != null) tasksToWait.Add(_readLoopTask);
         if (_dispatchLoopTask != null) tasksToWait.Add(_dispatchLoopTask);

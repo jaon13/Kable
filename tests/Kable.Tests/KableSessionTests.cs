@@ -55,7 +55,7 @@ public class KableSessionTests
             }));
         }
 
-        // 에코 서버: 클라이언트가 보낸 명령 1건을 읽을 때마다 즉시 1:1로 정확히 응답 라인을 써줌
+        // Echo server: immediately reply with 1:1 response line whenever 1 command is read
         var serverEchoTask = Task.Run(async () =>
         {
             var reader = factory.Context!.RemoteRead;

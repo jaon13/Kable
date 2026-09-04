@@ -89,6 +89,6 @@ public class CancellationEdgeTests
         // Session not started: calling RequestAsync must fail-fast without waiting for timeout
         Func<Task> act = async () => await session.RequestAsync<string>("PING_OFFLINE", TimeSpan.FromSeconds(5));
         await act.Should().ThrowAsync<DeviceDisconnectedException>()
-                 .WithMessage("*연결이 열려 있지 않습니다*");
+                 .WithMessage("*Connection is not open*");
     }
 }
