@@ -1,4 +1,4 @@
-namespace Kable.Tests.Cases;
+namespace Kable.Generators.Tests;
 
 using FluentAssertions;
 using Kable.Generators;
@@ -19,7 +19,7 @@ public readonly partial record struct TestEmergencyCommand;
 [DeviceCommand("oVALVE.{ValveId}:{State}")]
 public readonly partial record struct TestValveCommand(string ValveId, int State);
 
-public class SourceGeneratorTests
+public class SourceGeneratorExecutionTests
 {
     [Fact]
     public void GeneratedCommand_StaticWireTemplate_FormatsCorrectly()
