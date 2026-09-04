@@ -88,4 +88,51 @@ public sealed class IpcTransportIntegrationTests
         await session.StopAsync();
         await serverTask;
     }
+
+    [Fact]
+    public async Task TC_TRN_202_IpcDaemon_ClientProcessCrash_HostContinuesWithoutCrashing()
+    {
+        string pipeName = "Kable_Daemon_Test_" + Guid.NewGuid().ToString("N");
+        await using var server = new IpcNamedPipeServerListener(pipeName);
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+
+        // Accept Client 1
+        var client1Factory = new IpcNamedPipeClientFactory(pipeName);
+        var accept1Task = server.AcceptAsync(cts.Token);
+        var client1Ctx = await client1Factory.ConnectAsync(cts.Token);
+        var serverCtx1 = await accept1Task;
+
+        // Abruptly crash Client 1 (dispose client context without reading/writing)
+        await client1Ctx.DisposeAsync();
+
+        // Host server continues listening and accepts Client 2
+        var client2Factory = new IpcNamedPipeClientFactory(pipeName);
+        var accept2Task = server.AcceptAsync(cts.Token);
+        var client2Ctx = await client2Factory.ConnectAsync(cts.Token);
+        var serverCtx2 = await accept2Task;
+
+        // Background server read task to ensure pipe pump is active
+        var serverReadTask = Task.Run(async () =>
+        {
+            var res = await serverCtx2.Input.ReadAsync(cts.Token);
+            var text = Encoding.ASCII.GetString(System.Buffers.BuffersExtensions.ToArray(res.Buffer));
+            serverCtx2.Input.AdvanceTo(res.Buffer.End);
+            return text;
+        });
+
+        // Client 2 sends data
+        var testMsg = Encoding.ASCII.GetBytes("HELLO_CLIENT_2\n");
+        await client2Ctx.Output.WriteAsync(testMsg, cts.Token);
+        await client2Ctx.Output.FlushAsync(cts.Token);
+
+        var received = await serverReadTask;
+        received.Should().Be("HELLO_CLIENT_2\n");
+
+        // Clean up
+        await client2Ctx.DisposeAsync();
+        await serverCtx1.DisposeAsync();
+        await serverCtx2.DisposeAsync();
+    }
 }
+

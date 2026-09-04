@@ -341,4 +341,63 @@ public class TransportFaultInjectionTests
 
         await act.Should().ThrowAsync<TimeoutException>();
     }
+
+    [Fact]
+    public async Task TC_TRN_201_SerialPortFactory_NonExistentPort_ThrowsArgumentOrIOException()
+    {
+        var existingPorts = new System.Collections.Generic.HashSet<string>(
+            System.IO.Ports.SerialPort.GetPortNames(),
+            StringComparer.OrdinalIgnoreCase);
+
+        string nonExistentPort = $"COM_UNASSIGNED_{Guid.NewGuid():N}";
+        while (existingPorts.Contains(nonExistentPort))
+        {
+            nonExistentPort = $"COM_UNASSIGNED_{Guid.NewGuid():N}";
+        }
+
+        var factory = new SerialPortConnectionFactory(nonExistentPort);
+        Func<Task> act = async () => await factory.ConnectAsync();
+
+        await act.Should().ThrowAsync<Exception>()
+            .Where(e => e is System.IO.IOException || e is ArgumentException);
+    }
+
+    [Fact]
+    public async Task TC_TRN_203_TcpConnection_LargeWriteBackpressure_CancellationDuringFlush()
+    {
+        var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        int port = ((IPEndPoint)listener.LocalEndpoint).Port;
+
+        // Server accepts but never reads to force OS TCP send buffer saturation
+        var acceptTask = Task.Run(async () =>
+        {
+            using var accepted = await listener.AcceptTcpClientAsync();
+            // Wait without reading anything
+            await Task.Delay(2000);
+        });
+
+        var factory = new TcpConnectionFactory("127.0.0.1", port);
+        await using var ctx = await factory.ConnectAsync();
+
+        // Write massive buffer to exhaust TCP send window
+        byte[] largeChunk = new byte[64 * 1024]; // 64KB
+        using var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromMilliseconds(100));
+
+        Func<Task> act = async () =>
+        {
+            while (!cts.IsCancellationRequested)
+            {
+                await ctx.Output.WriteAsync(largeChunk, cts.Token);
+                await ctx.Output.FlushAsync(cts.Token);
+            }
+            cts.Token.ThrowIfCancellationRequested();
+        };
+
+        await act.Should().ThrowAsync<OperationCanceledException>();
+
+        listener.Stop();
+        await acceptTask;
+    }
 }
+
