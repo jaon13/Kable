@@ -23,9 +23,16 @@ public sealed class KableSession<TMessage> : IDeviceSession<TMessage>
     private readonly SemaphoreSlim _fifoLock = new(1, 1);
     private readonly ConcurrentDictionary<string, TaskCompletionSource<TMessage>> _pendingRequests = new();
     private readonly Channel<TMessage> _incomingStream = Channel.CreateUnbounded<TMessage>(new UnboundedChannelOptions { SingleWriter = true });
+    private readonly Channel<TMessage> _dispatchQueue = Channel.CreateBounded<TMessage>(new BoundedChannelOptions(10000)
+    {
+        FullMode = BoundedChannelFullMode.Wait,
+        SingleWriter = true,
+        SingleReader = true
+    });
 
     private IConnectionContext? _context;
     private Task? _readLoopTask;
+    private Task? _dispatchLoopTask;
     private TaskCompletionSource<TMessage>? _currentFifoTcs;
     private readonly CancellationTokenSource _sessionCts = new();
     private int _isConnected;
@@ -62,6 +69,7 @@ public sealed class KableSession<TMessage> : IDeviceSession<TMessage>
 
         _context = await _connectionFactory.ConnectAsync(ct).ConfigureAwait(false);
         _context.ConnectionClosed.Register(OnConnectionClosed);
+        _dispatchLoopTask = Task.Run(DispatchLoopAsync);
         _readLoopTask = Task.Run(ReadLoopAsync);
     }
 
@@ -195,7 +203,11 @@ public sealed class KableSession<TMessage> : IDeviceSession<TMessage>
 
                 while (_codec.TryDecode(ref buffer, out var message))
                 {
-                    DispatchMessage(message);
+                    // I/O 루프를 지연시키지 않고 전용 디스패치 큐에 비차단 우선 적재
+                    if (!_dispatchQueue.Writer.TryWrite(message))
+                    {
+                        await _dispatchQueue.Writer.WriteAsync(message, _sessionCts.Token).ConfigureAwait(false);
+                    }
                 }
 
                 reader.AdvanceTo(buffer.Start, buffer.End);
@@ -208,7 +220,27 @@ public sealed class KableSession<TMessage> : IDeviceSession<TMessage>
         }
         finally
         {
+            _dispatchQueue.Writer.TryComplete();
             OnConnectionClosed();
+        }
+    }
+
+    private async Task DispatchLoopAsync()
+    {
+        try
+        {
+            var reader = _dispatchQueue.Reader;
+            while (await reader.WaitToReadAsync(_sessionCts.Token).ConfigureAwait(false))
+            {
+                while (reader.TryRead(out var message))
+                {
+                    DispatchMessage(message);
+                }
+            }
+        }
+        catch
+        {
+            // 세션 취소 시 안전 종료
         }
     }
 
@@ -272,6 +304,19 @@ public sealed class KableSession<TMessage> : IDeviceSession<TMessage>
     {
         _sessionCts.Cancel();
         OnConnectionClosed();
+
+        // Graceful Join: I/O 펌프 및 디스패치 루프가 정리될 때까지 최대 2초 안전 대기
+        var tasksToWait = new List<Task>();
+        if (_readLoopTask != null) tasksToWait.Add(_readLoopTask);
+        if (_dispatchLoopTask != null) tasksToWait.Add(_dispatchLoopTask);
+
+        if (tasksToWait.Count > 0)
+        {
+            var joinAllTask = Task.WhenAll(tasksToWait);
+            var timeoutTask = Task.Delay(2000);
+            await Task.WhenAny(joinAllTask, timeoutTask).ConfigureAwait(false);
+        }
+
         if (_context != null)
         {
             await _context.DisposeAsync().ConfigureAwait(false);
