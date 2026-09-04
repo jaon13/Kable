@@ -87,7 +87,7 @@ public sealed class KableSession<TMessage> : IDeviceSession<TMessage>
     public async ValueTask<TResponse> RequestAsync<TResponse>(TMessage request, TimeSpan timeout, CancellationToken ct = default)
     {
         EnsureConnected();
-        var sw = Stopwatch.StartNew();
+        long startTimestamp = Stopwatch.GetTimestamp();
 
         if (!_codec.SupportsCorrelationId)
         {
@@ -106,7 +106,7 @@ public sealed class KableSession<TMessage> : IDeviceSession<TMessage>
                 {
                     _observer?.OnPacketTrace(new PacketTraceRecord(
                         DateTime.UtcNow, PacketDirection.Tx, TrafficKind.SpontaneousAlarm,
-                        "IO_FLUSH_ERROR", ReadOnlyMemory<byte>.Empty, ex.Message, sw.Elapsed, LogLevel.Error));
+                        "IO_FLUSH_ERROR", ReadOnlyMemory<byte>.Empty, ex.Message, GetElapsedTime(startTimestamp), LogLevel.Error));
                     OnConnectionClosed();
                     throw new DeviceDisconnectedException("Hardware connection was lost during data transmission.", ex);
                 }
@@ -120,10 +120,10 @@ public sealed class KableSession<TMessage> : IDeviceSession<TMessage>
                 if (completedTask == responseTask)
                 {
                     var response = await responseTask.ConfigureAwait(false);
-                    sw.Stop();
+                    var elapsed = GetElapsedTime(startTimestamp);
                     _observer?.OnPacketTrace(new PacketTraceRecord(
                         DateTime.UtcNow, PacketDirection.Tx, TrafficKind.AperiodicCommand,
-                        "REQUEST_RESP", ReadOnlyMemory<byte>.Empty, response?.ToString(), sw.Elapsed, LogLevel.Debug));
+                        "REQUEST_RESP", ReadOnlyMemory<byte>.Empty, response?.ToString(), elapsed, LogLevel.Debug));
 
                     if (response is TResponse typedRes) return typedRes;
                     throw new InvalidCastException($"Expected {typeof(TResponse).Name}, received {response?.GetType().Name}");
@@ -134,7 +134,7 @@ public sealed class KableSession<TMessage> : IDeviceSession<TMessage>
                     _observer?.OnPacketTrace(new PacketTraceRecord(
                         DateTime.UtcNow, PacketDirection.Tx, TrafficKind.SpontaneousAlarm,
                         "DEVICE_TIMEOUT", ReadOnlyMemory<byte>.Empty,
-                        $"Command '{request}' timed out after {timeout.TotalMilliseconds}ms.", sw.Elapsed, LogLevel.Warning));
+                        $"Command '{request}' timed out after {timeout.TotalMilliseconds}ms.", GetElapsedTime(startTimestamp), LogLevel.Warning));
                     throw new DeviceTimeoutException(request?.ToString() ?? "UnknownCommand", timeout);
                 }
 
@@ -163,7 +163,7 @@ public sealed class KableSession<TMessage> : IDeviceSession<TMessage>
                 {
                     _observer?.OnPacketTrace(new PacketTraceRecord(
                         DateTime.UtcNow, PacketDirection.Tx, TrafficKind.SpontaneousAlarm,
-                        "IO_FLUSH_ERROR", ReadOnlyMemory<byte>.Empty, ex.Message, sw.Elapsed, LogLevel.Error));
+                        "IO_FLUSH_ERROR", ReadOnlyMemory<byte>.Empty, ex.Message, GetElapsedTime(startTimestamp), LogLevel.Error));
                     OnConnectionClosed();
                     throw new DeviceDisconnectedException("Hardware connection was lost during data transmission.", ex);
                 }
@@ -177,10 +177,10 @@ public sealed class KableSession<TMessage> : IDeviceSession<TMessage>
                 if (completedTask == responseTask)
                 {
                     var response = await responseTask.ConfigureAwait(false);
-                    sw.Stop();
+                    var elapsed = GetElapsedTime(startTimestamp);
                     _observer?.OnPacketTrace(new PacketTraceRecord(
                         DateTime.UtcNow, PacketDirection.Tx, TrafficKind.AperiodicCommand,
-                        "REQUEST_RESP", ReadOnlyMemory<byte>.Empty, response?.ToString(), sw.Elapsed, LogLevel.Debug));
+                        "REQUEST_RESP", ReadOnlyMemory<byte>.Empty, response?.ToString(), elapsed, LogLevel.Debug));
 
                     if (response is TResponse typedRes) return typedRes;
                     throw new InvalidCastException($"Expected {typeof(TResponse).Name}, received {response?.GetType().Name}");
@@ -189,7 +189,7 @@ public sealed class KableSession<TMessage> : IDeviceSession<TMessage>
                 _observer?.OnPacketTrace(new PacketTraceRecord(
                     DateTime.UtcNow, PacketDirection.Tx, TrafficKind.SpontaneousAlarm,
                     "DEVICE_TIMEOUT", ReadOnlyMemory<byte>.Empty,
-                    $"Command '{request}' timed out after {timeout.TotalMilliseconds}ms.", sw.Elapsed, LogLevel.Warning));
+                    $"Command '{request}' timed out after {timeout.TotalMilliseconds}ms.", GetElapsedTime(startTimestamp), LogLevel.Warning));
                 throw new DeviceTimeoutException(request?.ToString() ?? "UnknownCommand", timeout);
             }
             finally
@@ -197,6 +197,19 @@ public sealed class KableSession<TMessage> : IDeviceSession<TMessage>
                 _pendingRequests.TryRemove(cid, out _);
             }
         }
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static TimeSpan GetElapsedTime(long startingTimestamp)
+    {
+#if NET8_0_OR_GREATER
+        return Stopwatch.GetElapsedTime(startingTimestamp);
+#else
+        long end = Stopwatch.GetTimestamp();
+        long timestampDelta = end - startingTimestamp;
+        long ticks = (long)((double)timestampDelta * TimeSpan.TicksPerSecond / Stopwatch.Frequency);
+        return new TimeSpan(ticks);
+#endif
     }
 
     public async ValueTask SendUrgentAsync(TMessage urgentMessage)
