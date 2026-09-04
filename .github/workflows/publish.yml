@@ -1,0 +1,46 @@
+﻿name: Publish Kable to NuGet
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  build-test-publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore Dependencies
+        run: dotnet restore Kable.sln
+
+      - name: Build Solution
+        run: dotnet build Kable.sln --configuration Release --no-restore
+
+      - name: Run Unit Tests
+        run: dotnet test Kable.sln --configuration Release --no-build --verbosity normal
+
+      - name: Pack NuGet Packages
+        if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+        run: dotnet pack src/Kable/Kable.csproj --configuration Release --no-build --output ./nupkgs
+
+      - name: Publish to NuGet.org
+        if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+        run: |
+          dotnet nuget push ./nupkgs/*.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
