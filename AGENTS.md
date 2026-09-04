@@ -10,8 +10,11 @@
   - `docs/SYSTEM_DESIGN.md`: Core interfaces (`IConnectionContext`, `IProtocolCodec`, `IDeviceSession`), and pipeline interaction flows.
   - `docs/CONVENTIONS.md`: Coding standards, modular file limits, prohibition of synchronous blocking, and TDD principles.
 
-## 2. Modular Isolation & File Size Control
+## 2. Modular Isolation, File Size Control & Complexity-Driven Decomposition
 - A single file **MUST NOT exceed 300~500 lines**.
+- **Proactive Decomposition upon Rising Complexity**:
+  - Whenever a component's complexity grows (multiple distinct responsibilities, branching protocols, or growing test suites), **proactively split the file and organize into dedicated domain subdirectories** (e.g., `Cases/Transports/`, `Cases/Codecs/`, `Cases/Engine/`).
+  - Do not allow a single folder or file to become a catch-all flat dumping ground. Sibling projects in `src/` and `tests/` must maintain 1:1 structural symmetry.
 - Code omissions (`// ... existing code ...`, `// todo: rest of logic`, etc.) are strictly prohibited. Always produce complete and explicit code.
 - Strict 3-tier boundary isolation: Physical I/O (`Transports`) $\rightarrow$ Framing & Serialization (`Codecs`) $\rightarrow$ Reactive Interaction (`Engine`).
 
