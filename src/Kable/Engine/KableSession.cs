@@ -35,7 +35,10 @@ public sealed class KableSession<TMessage> : IDeviceSession<TMessage>
     private Task? _dispatchLoopTask;
     private TaskCompletionSource<TMessage>? _currentFifoTcs;
     private readonly CancellationTokenSource _sessionCts = new();
+    private readonly HeartbeatOptions<TMessage>? _heartbeatOptions;
+    private Task? _heartbeatTask;
     private int _isConnected;
+    private long _lastInboundTicks;
 
     public bool IsConnected => Volatile.Read(ref _isConnected) == 1;
 
@@ -56,11 +59,13 @@ public sealed class KableSession<TMessage> : IDeviceSession<TMessage>
     public KableSession(
         IConnectionFactory connectionFactory,
         IProtocolCodec<TMessage> codec,
-        ICommObserver? observer = null)
+        ICommObserver? observer = null,
+        HeartbeatOptions<TMessage>? heartbeatOptions = null)
     {
         _connectionFactory = connectionFactory;
         _codec = codec;
         _observer = observer;
+        _heartbeatOptions = heartbeatOptions;
     }
 
     public async ValueTask StartAsync(CancellationToken ct = default)
@@ -69,8 +74,14 @@ public sealed class KableSession<TMessage> : IDeviceSession<TMessage>
 
         _context = await _connectionFactory.ConnectAsync(ct).ConfigureAwait(false);
         _context.ConnectionClosed.Register(OnConnectionClosed);
+        Volatile.Write(ref _lastInboundTicks, DateTime.UtcNow.Ticks);
         _dispatchLoopTask = Task.Run(DispatchLoopAsync);
         _readLoopTask = Task.Run(ReadLoopAsync);
+
+        if (_heartbeatOptions != null)
+        {
+            _heartbeatTask = Task.Run(HeartbeatLoopAsync);
+        }
     }
 
     public async ValueTask SendAsync(TMessage message, CancellationToken ct = default)
@@ -305,6 +316,14 @@ public sealed class KableSession<TMessage> : IDeviceSession<TMessage>
 
     private void DispatchMessage(TMessage message)
     {
+        Volatile.Write(ref _lastInboundTicks, DateTime.UtcNow.Ticks);
+
+        if (_heartbeatOptions?.IsPongResponse != null && _heartbeatOptions.IsPongResponse(message))
+        {
+            // Handled as heartbeat pong
+            return;
+        }
+
         if (_codec.IsAutonomousMessage(message))
         {
             _incomingStream.Writer.TryWrite(message);
@@ -334,6 +353,52 @@ public sealed class KableSession<TMessage> : IDeviceSession<TMessage>
 
         // Publish to incoming stream channel if no request is awaiting response
         _incomingStream.Writer.TryWrite(message);
+    }
+
+    private async Task HeartbeatLoopAsync()
+    {
+        if (_heartbeatOptions == null) return;
+
+        try
+        {
+            while (!_sessionCts.IsCancellationRequested)
+            {
+                await Task.Delay(_heartbeatOptions.Interval, _sessionCts.Token).ConfigureAwait(false);
+
+                long lastTicks = Volatile.Read(ref _lastInboundTicks);
+                var elapsed = DateTime.UtcNow - new DateTime(lastTicks, DateTimeKind.Utc);
+
+                if (elapsed > _heartbeatOptions.Timeout)
+                {
+                    // Device is unresponsive: trigger immediate disconnect
+                    _observer?.OnPacketTrace(new PacketTraceRecord(
+                        DateTime.UtcNow, PacketDirection.Rx, TrafficKind.SpontaneousAlarm,
+                        "HEARTBEAT_TIMEOUT", ReadOnlyMemory<byte>.Empty,
+                        $"Device heartbeat timed out after {elapsed.TotalMilliseconds:F1}ms.", TimeSpan.Zero, LogLevel.Error));
+
+                    _context?.Abort("Heartbeat timeout");
+                    OnConnectionClosed();
+                    break;
+                }
+
+                // Send Ping
+                try
+                {
+                    var pingMsg = _heartbeatOptions.PingFactory();
+                    _codec.Encode(pingMsg, _context!.Output);
+                    await _context.Output.FlushAsync(_sessionCts.Token).ConfigureAwait(false);
+                }
+                catch (Exception)
+                {
+                    // Ping send failed, will be captured by connection closed
+                    break;
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Cooperative cancellation
+        }
     }
 
     private void OnConnectionClosed()
@@ -368,6 +433,7 @@ public sealed class KableSession<TMessage> : IDeviceSession<TMessage>
         var tasksToWait = new List<Task>();
         if (_readLoopTask != null) tasksToWait.Add(_readLoopTask);
         if (_dispatchLoopTask != null) tasksToWait.Add(_dispatchLoopTask);
+        if (_heartbeatTask != null) tasksToWait.Add(_heartbeatTask);
 
         if (tasksToWait.Count > 0)
         {
