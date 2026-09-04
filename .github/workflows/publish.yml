@@ -40,7 +40,7 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
         run: dotnet pack src/Kable/Kable.csproj --configuration Release --no-build --output ./nupkgs
 
-      - name: Publish to NuGet.org
+      - name: Publish to NuGet.org (Trusted Publisher OIDC)
         if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
         run: |
-          dotnet nuget push ./nupkgs/*.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
+          dotnet nuget push ./nupkgs/*.nupkg --source https://api.nuget.org/v3/index.json --skip-duplicate
