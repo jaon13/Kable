@@ -117,4 +117,66 @@ public class ByteFragmentationTests
         msg.Should().BeEmpty();
         sequence.Length.Should().Be(initialLen, "Cursor should not advance when frame is incomplete");
     }
+
+    [Fact]
+    public void TC_COD_201_AsciiLineCodec_EmbeddedNullBytes_DecodesPreservingBinaryContent()
+    {
+        var codec = new AsciiLineCodec(delimiter: 0x0A);
+        // Raw bytes with embedded \0 bytes: "HEADER\0PAYLOAD\0EXTRA\n"
+        byte[] raw = new byte[] { 0x48, 0x45, 0x41, 0x44, 0x45, 0x52, 0x00, 0x50, 0x41, 0x59, 0x4C, 0x4F, 0x41, 0x44, 0x00, 0x45, 0x58, 0x54, 0x52, 0x41, 0x0A };
+        var sequence = new ReadOnlySequence<byte>(raw);
+
+        bool decoded = codec.TryDecode(ref sequence, out var msg);
+
+        decoded.Should().BeTrue();
+        msg.Length.Should().Be(20); // 20 chars without delimiter
+        msg.Should().Be("HEADER\0PAYLOAD\0EXTRA");
+        sequence.Length.Should().Be(0);
+    }
+
+    [Fact]
+    public void TC_COD_202_AsciiLineCodec_FrameExceedingLimit_ConsumesCorruptedFrameToPreventDeadlock()
+    {
+        // MaxFrameSize is 20. Corrupted frame is 30 bytes + \n, followed by normal frame "OK\n"
+        var codec = new AsciiLineCodec(delimiter: 0x0A, maxFrameSize: 20);
+
+        string corruptedPayload = new string('X', 30) + "\n";
+        string validPayload = "OK\n";
+        byte[] bufferBytes = Encoding.ASCII.GetBytes(corruptedPayload + validPayload);
+        var sequence = new ReadOnlySequence<byte>(bufferBytes);
+
+        // 1. First decode attempt should throw ProtocolViolationException and advance past the corrupted frame
+        Action act = () => codec.TryDecode(ref sequence, out _);
+        act.Should().Throw<Kable.Exceptions.ProtocolViolationException>();
+
+        // 2. Buffer must have advanced past the corrupted frame delimiter, remaining only validPayload
+        sequence.Length.Should().Be(Encoding.ASCII.GetBytes(validPayload).Length);
+
+        // 3. Next decode attempt succeeds with "OK"
+        bool secondDecoded = codec.TryDecode(ref sequence, out var validMsg);
+        secondDecoded.Should().BeTrue();
+        validMsg.Should().Be("OK");
+        sequence.Length.Should().Be(0);
+    }
+
+    [Theory]
+    [InlineData(0x00)] // Null byte delimiter
+    [InlineData(0x03)] // ETX
+    [InlineData(0x04)] // EOT
+    public void TC_COD_203_AsciiLineCodec_CustomDelimiterZero_WorksCorrectly(byte delimiter)
+    {
+        var codec = new AsciiLineCodec(delimiter: delimiter);
+        string payload = "DEVICE_REPORT_STATUS";
+        byte[] raw = new byte[payload.Length + 1];
+        Encoding.ASCII.GetBytes(payload).CopyTo(raw, 0);
+        raw[payload.Length] = delimiter;
+
+        var sequence = new ReadOnlySequence<byte>(raw);
+
+        bool decoded = codec.TryDecode(ref sequence, out var msg);
+
+        decoded.Should().BeTrue();
+        msg.Should().Be(payload);
+        sequence.Length.Should().Be(0);
+    }
 }
