@@ -103,4 +103,122 @@ public readonly partial record struct MeasureSampleCommand(string Id, double Vol
         generatedCode.Should().NotBeNull();
         generatedCode.Should().Contain("$\"SAMPLE.{Id}:{Volume}\"");
     }
+
+    [Fact]
+    public void TC_GEN_201_Generator_EscapedBracesInTemplate_GeneratesValidInterpolation()
+    {
+        string userSource = @"
+namespace TestApp;
+using Kable.Generators;
+
+[DeviceCommand(""SET_CONFIG:{{{Key}:{Value}}}"")]
+public readonly partial record struct ConfigCommand(string Key, string Value);
+";
+        var syntaxTree = CSharpSyntaxTree.ParseText(userSource);
+        var references = new[]
+        {
+            MetadataReference.CreateFromFile(typeof(object).Assembly.Location),
+            MetadataReference.CreateFromFile(Assembly.Load("System.Runtime").Location)
+        };
+
+        var compilation = CSharpCompilation.Create("TestCompilationEscaped",
+            new[] { syntaxTree },
+            references,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+
+        var generator = new ProtocolSourceGenerator();
+        GeneratorDriver driver = CSharpGeneratorDriver.Create(generator);
+
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var diagnostics);
+
+        var errors = diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ToList();
+        errors.Should().BeEmpty();
+
+        var runResult = driver.GetRunResult();
+        var generatedCode = runResult.GeneratedTrees
+            .Select(t => t.ToString())
+            .FirstOrDefault(s => s.Contains("ConfigCommand"));
+
+        generatedCode.Should().NotBeNull();
+        generatedCode.Should().Contain("$\"SET_CONFIG:{{{Key}:{Value}}}\"");
+    }
+
+    [Fact]
+    public void TC_GEN_202_Generator_SpecialCharactersInNamespace_GeneratesValidCode()
+    {
+        string userSource = @"
+namespace Special_App.Sub_Module.V1_0;
+using Kable.Generators;
+
+[DeviceCommand(""CMD_SPECIAL"")]
+public readonly partial record struct SpecialNamespaceCommand;
+";
+        var syntaxTree = CSharpSyntaxTree.ParseText(userSource);
+        var references = new[]
+        {
+            MetadataReference.CreateFromFile(typeof(object).Assembly.Location),
+            MetadataReference.CreateFromFile(Assembly.Load("System.Runtime").Location)
+        };
+
+        var compilation = CSharpCompilation.Create("TestCompilationSpecialNs",
+            new[] { syntaxTree },
+            references,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+
+        var generator = new ProtocolSourceGenerator();
+        GeneratorDriver driver = CSharpGeneratorDriver.Create(generator);
+
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var diagnostics);
+
+        var errors = diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ToList();
+        errors.Should().BeEmpty();
+
+        var runResult = driver.GetRunResult();
+        var generatedCode = runResult.GeneratedTrees
+            .Select(t => t.ToString())
+            .FirstOrDefault(s => s.Contains("SpecialNamespaceCommand"));
+
+        generatedCode.Should().NotBeNull();
+        generatedCode.Should().Contain("namespace Special_App.Sub_Module.V1_0");
+    }
+
+    [Fact]
+    public void TC_GEN_203_Generator_ClassInsteadOfStruct_ImplementsInterfaceCorrectly()
+    {
+        string userSource = @"
+namespace TestApp;
+using Kable.Generators;
+
+[DeviceCommand(""RESET_CONTROLLER"")]
+public partial class ResetControllerClassCommand;
+";
+        var syntaxTree = CSharpSyntaxTree.ParseText(userSource);
+        var references = new[]
+        {
+            MetadataReference.CreateFromFile(typeof(object).Assembly.Location),
+            MetadataReference.CreateFromFile(Assembly.Load("System.Runtime").Location)
+        };
+
+        var compilation = CSharpCompilation.Create("TestCompilationClass",
+            new[] { syntaxTree },
+            references,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+
+        var generator = new ProtocolSourceGenerator();
+        GeneratorDriver driver = CSharpGeneratorDriver.Create(generator);
+
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var diagnostics);
+
+        var errors = diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ToList();
+        errors.Should().BeEmpty();
+
+        var runResult = driver.GetRunResult();
+        var generatedCode = runResult.GeneratedTrees
+            .Select(t => t.ToString())
+            .FirstOrDefault(s => s.Contains("ResetControllerClassCommand"));
+
+        generatedCode.Should().NotBeNull();
+        generatedCode.Should().Contain("partial class ResetControllerClassCommand : global::Kable.Generators.IDeviceWireCommand");
+    }
 }
+
