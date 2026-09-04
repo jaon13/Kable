@@ -51,6 +51,8 @@ public sealed class IpcTransportIntegrationTests
         await using var server = new IpcNamedPipeServerListener(pipeName);
 
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        var requestCompleted = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
         var serverTask = Task.Run(async () =>
         {
             await using var ctx = await server.AcceptAsync(cts.Token);
@@ -69,6 +71,9 @@ public sealed class IpcTransportIntegrationTests
                 ctx.Input.AdvanceTo(buf.Start, buf.End);
                 if (res.IsCompleted) break;
             }
+
+            // Keep context alive until client completes its assertions
+            await Task.WhenAny(requestCompleted.Task, Task.Delay(2000, cts.Token));
         });
 
         var clientFactory = new IpcNamedPipeClientFactory(pipeName);
@@ -79,6 +84,7 @@ public sealed class IpcTransportIntegrationTests
         var response = await session.RequestAsync<string>("GET_STATUS", TimeSpan.FromSeconds(3), cts.Token);
         response.Should().Be("STATUS_OK");
 
+        requestCompleted.TrySetResult(true);
         await session.StopAsync();
         await serverTask;
     }

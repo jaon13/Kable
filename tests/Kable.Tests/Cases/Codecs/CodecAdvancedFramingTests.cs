@@ -76,17 +76,18 @@ public class CodecAdvancedFramingTests
     {
         var codec = new AsciiLineCodec(delimiter: 0x0A, encoding: Encoding.UTF8);
 
-        byte[] hangulBytes = Encoding.UTF8.GetBytes("한글데이터\n");
+        // UTF-8 multibyte payload split across buffer segment boundaries (Euro symbol € and accented characters)
+        byte[] utf8Bytes = Encoding.UTF8.GetBytes("Data_€_Sample_Café\n");
 
-        var seg1 = new CustomBufferSegment(hangulBytes.AsMemory(0, 4));
-        var seg2 = new CustomBufferSegment(hangulBytes.AsMemory(4, hangulBytes.Length - 4));
+        var seg1 = new CustomBufferSegment(utf8Bytes.AsMemory(0, 4));
+        var seg2 = new CustomBufferSegment(utf8Bytes.AsMemory(4, utf8Bytes.Length - 4));
         seg1.SetNext(seg2);
         var sequence = new ReadOnlySequence<byte>(seg1, 0, seg2, seg2.Memory.Length);
 
         bool success = codec.TryDecode(ref sequence, out var message);
 
         success.Should().BeTrue();
-        message.Should().Be("한글데이터");
+        message.Should().Be("Data_€_Sample_Café");
         sequence.Length.Should().Be(0);
     }
 
@@ -199,18 +200,18 @@ public class CodecAdvancedFramingTests
     public void TC_COD_104_Codec_MultiByteUtf8SplitAcrossSegments_PreservesCharacters()
     {
         var codec = new AsciiLineCodec(delimiter: 0x0A, encoding: Encoding.UTF8);
-        byte[] hangul = Encoding.UTF8.GetBytes("시험결과성공\n");
+        byte[] utf8Bytes = Encoding.UTF8.GetBytes("Test_Résultat_OK\n");
 
-        var seg1 = new CustomBufferSegment(hangul.AsMemory(0, 1));
-        var seg2 = new CustomBufferSegment(hangul.AsMemory(1, 2));
-        var seg3 = new CustomBufferSegment(hangul.AsMemory(3, hangul.Length - 3));
+        var seg1 = new CustomBufferSegment(utf8Bytes.AsMemory(0, 1));
+        var seg2 = new CustomBufferSegment(utf8Bytes.AsMemory(1, 2));
+        var seg3 = new CustomBufferSegment(utf8Bytes.AsMemory(3, utf8Bytes.Length - 3));
         seg1.SetNext(seg2).SetNext(seg3);
 
         var sequence = new ReadOnlySequence<byte>(seg1, 0, seg3, seg3.Memory.Length);
 
         bool success = codec.TryDecode(ref sequence, out var message);
         success.Should().BeTrue();
-        message.Should().Be("시험결과성공");
+        message.Should().Be("Test_Résultat_OK");
         sequence.Length.Should().Be(0);
     }
 
