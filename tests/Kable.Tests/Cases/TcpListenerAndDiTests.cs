@@ -68,4 +68,37 @@ public class TcpListenerAndDiTests
         var session = provider.GetService<IDeviceSession<string>>();
         session.Should().NotBeNull();
     }
+
+    [Fact]
+    public void TC_GEN_103_Builder_MissingCodecOrFactory_ThrowsDescriptiveInvalidOperationException()
+    {
+        var builder = new KableClientBuilder<string>();
+
+        Action actNoFactory = () => builder.Build();
+        actNoFactory.Should().Throw<InvalidOperationException>()
+                    .WithMessage("*ConnectionFactory must be configured*");
+
+        Action actNoCodec = () => builder.UseTcp("127.0.0.1", 9000).Build();
+        actNoCodec.Should().Throw<InvalidOperationException>()
+                  .WithMessage("*ProtocolCodec must be configured*");
+    }
+
+    [Fact]
+    public void TC_GEN_104_ServiceCollection_AddKableSession_ResolvesCorrectSingletonOrScoped()
+    {
+        var services = new ServiceCollection();
+        services.AddKable();
+        services.AddKableSession<string>((builder, sp) =>
+        {
+            builder.UseNamedPipe("di_pipe_test")
+                   .UseCodec(new AsciiLineCodec());
+        });
+
+        using var provider = services.BuildServiceProvider();
+
+        var session1 = provider.GetRequiredService<IDeviceSession<string>>();
+        var session2 = provider.GetRequiredService<IDeviceSession<string>>();
+
+        session1.Should().BeSameAs(session2, "Default AddKableSession should register session as Singleton");
+    }
 }

@@ -52,14 +52,19 @@ public sealed class TestMemoryConnectionContext : IConnectionContext
         await RemoteWrite.FlushAsync();
     }
 
+    private int _isDisposed;
+
     public ValueTask DisposeAsync()
     {
-        _cts.Cancel();
-        _inPipe.Writer.Complete();
-        _inPipe.Reader.Complete();
-        _outPipe.Writer.Complete();
-        _outPipe.Reader.Complete();
-        _cts.Dispose();
+        if (Interlocked.Exchange(ref _isDisposed, 1) == 0)
+        {
+            _cts.Cancel();
+            _inPipe.Writer.Complete();
+            _inPipe.Reader.Complete();
+            _outPipe.Writer.Complete();
+            _outPipe.Reader.Complete();
+            _cts.Dispose();
+        }
         return default;
     }
 }
