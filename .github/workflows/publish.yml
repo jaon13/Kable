@@ -1,4 +1,4 @@
-﻿name: Publish Kable to NuGet
+name: Publish Kable to NuGet
 
 on:
   push:
@@ -35,7 +35,9 @@ jobs:
 
       - name: Pack NuGet Packages
         if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
-        run: dotnet pack src/Kable/Kable.csproj --configuration Release --output ./nupkgs
+        run: |
+          dotnet pack src/Kable.Core/Kable.Core.csproj --configuration Release --output ./nupkgs
+          dotnet pack src/Kable/Kable.csproj --configuration Release --output ./nupkgs
 
       - name: NuGet Login (OIDC Trusted Publisher)
         if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
