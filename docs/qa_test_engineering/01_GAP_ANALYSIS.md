@@ -11,14 +11,14 @@
 현재 Kable 솔루션은 xUnit 및 FluentAssertions 기반으로 구축된 강력한 테스트 스위트를 갖추고 있으며, 모든 테스트가 최신 빌드에서 100% 정상 통과하고 있습니다.
 
 ### 현재 테스트 수량 통계
-- **`Kable.Tests`**: 총 105개 테스트
-  - `Transports`: 14개 (TCP, NamedPipe, SerialPort mock, Listener, Fault Injection)
-  - `Codecs`: 16개 (AsciiLineCodec, 1-byte sliding, Multi-segment, BinaryLengthPrefixed)
-  - `Engine`: 72개 (KableSession, FIFO serialization, Out-of-Order multiplexing, Cancellation, Lifecycle, SpscRingBuffer, Watchdog)
-  - `Observability`: 3개 (CommObserver Bounded ringbuffer, DropOldest, Multi-threaded burst)
-- **`Kable.Generators.Tests`**: 총 5개 테스트
-  - `SourceGeneratorExecutionTests`: Attribute 매핑, 단일/다중 파라미터 보간, IsUrgent 마커, Roslyn Driver In-Memory 컴파일
-- **전체 통과율**: 110 / 110 (100% Pass)
+- **`Kable.Tests`**: 총 122개 테스트
+  - `Transports`: 17개 (TCP, NamedPipe, SerialPort, Listener, Fault Injection, Dynamic Port, IPC Crash Resilience, Backpressure)
+  - `Codecs`: 19개 (AsciiLineCodec, 1-byte sliding, Multi-segment, BinaryLengthPrefixed, Embedded Null, Corrupted Frame Skip, Custom Delimiters)
+  - `Engine`: 75개 (KableSession, FIFO serialization, Out-of-Order multiplexing, Cancellation, Lifecycle, SpscRingBuffer, Watchdog, Bounded Backpressure, Disposal Safety, Caller Token Release)
+  - `Observability`: 7개 (CommObserver Bounded ringbuffer, DropOldest, Multi-threaded burst, LogLevel Debug/Critical, Warning/Error, Dispatch fault, Alarm Channel Isolation, Clean Shutdown False-Alarm Guard, Tx Flush Fault)
+- **`Kable.Generators.Tests`**: 총 8개 테스트
+  - `SourceGeneratorExecutionTests`: Attribute 매핑, 단일/다중 파라미터 보간, IsUrgent 마커, Roslyn Driver In-Memory 컴파일, 이스케이프 중괄호, 특수 네임스페이스, 일반 partial class 지원
+- **전체 통과율**: 130 / 130 (100% Pass)
 
 ---
 
