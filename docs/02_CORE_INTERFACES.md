@@ -1,28 +1,31 @@
-# 02. Core Interfaces Specification (핵심 인터페이스 규격)
+# 02. Core Interfaces Specification
 
-> 본 문서는 BCL `System.IO.Pipelines` 기반의 전송 계층 인터페이스와 RSocket 스타일의 상위 세션 인터페이스를 정의합니다.
+> This document specifies the transport-level contracts based on `System.IO.Pipelines` alongside the upper-level RSocket reactive session interfaces.
 
 ---
 
-## 1. Bedrock 하부 연결 컨텍스트 (`IConnectionContext`)
+## 1. Bedrock Lower Transport Context (`IConnectionContext`)
 
-모든 물리(TCP, Serial) 및 논리(NamedPipe IPC) 연결을 단일화하는 핵심 규격입니다:
+The core specification unifying all physical (TCP, Serial) and logical (NamedPipe IPC) connections:
 
 ```csharp
 namespace Kable.Core;
 
+using System;
 using System.IO.Pipelines;
+using System.Threading;
+using System.Threading.Tasks;
 
 public interface IConnectionContext : IAsyncDisposable
 {
     string ConnectionId { get; }
     string EndpointDescription { get; }
     
-    // Bedrock 표준 0-GC 파이프
+    // Bedrock Standard 0-GC Pipelines
     PipeReader Input { get; }
     PipeWriter Output { get; }
     
-    // 단절 알림 토큰 (OS KeepAlive 단절 감지)
+    // Disconnection Notification Token
     CancellationToken ConnectionClosed { get; }
     
     void Abort(string reason);
@@ -42,9 +45,9 @@ public interface IConnectionListener : IAsyncDisposable
 
 ---
 
-## 2. 프로토콜 코덱 인터페이스 (`IProtocolCodec<TMessage>`)
+## 2. Protocol Codec Interface (`IProtocolCodec<TMessage>`)
 
-와이어 바이트 스트림과 비즈니스 메시지 간의 양방향 0-할당 변환기입니다:
+A bidirectional zero-allocation transformer bridging the raw wire byte sequence and typed domain messages:
 
 ```csharp
 namespace Kable.Codecs;
@@ -53,48 +56,55 @@ using System.Buffers;
 
 public interface IProtocolCodec<TMessage>
 {
-    // 프로토콜이 시퀀스 번호/Correlation ID를 자체 지원하는지 여부
-    // false일 경우 세션 엔진이 자동으로 선점형 FIFO 락(SemaphoreSlim)을 걸어 동시 호출 시 꼬임을 방지함
+    // Indicates whether the protocol supports correlation tokens natively.
+    // If false, the session engine applies a preemptive FIFO lock (SemaphoreSlim)
+    // to guarantee responses are not misattributed under concurrent invocations.
     bool SupportsCorrelationId { get; }
 
-    // 수신 버퍼에서 메시지 프레임 디코딩 (Zero-Allocation)
+    // Decodes a complete message frame from the input sequence without allocations
     bool TryDecode(ref ReadOnlySequence<byte> buffer, out TMessage message);
     
-    // 송신 메시지를 파이프 버퍼에 직렬화 인코딩
+    // Encodes a message into the pipe output writer buffer
     void Encode(TMessage message, IBufferWriter<byte> output);
     
-    // 요청-응답 매핑용 Correlation ID 추출 (SupportsCorrelationId == true일 때 사용)
+    // Extracts correlation token for request-response matching
     string? ExtractCorrelationId(TMessage message);
 
-    // 요청 응답이 아닌 장비 자발적 텔레메트리/하트비트/알람인지 판별 (true면 RequestAsync 대기자를 깨우지 않고 Stream으로 직행)
+    // Identifies whether an incoming frame is unsolicited telemetry/heartbeat/alarm
+    // (If true, it is routed directly to the Stream channel rather than waking request callers)
     bool IsAutonomousMessage(TMessage message) => false;
 }
 ```
 
 ---
 
-## 3. 상부 RSocket 세션 인터페이스 (`IDeviceSession<TMessage>`)
+## 3. Upper Reactive Session Interface (`IDeviceSession<TMessage>`)
 
-장비 제어기가 호출하는 최상위 단일 인터페이스입니다:
+The primary public-facing unified interface for hardware control and telemetry subscription:
 
 ```csharp
 namespace Kable.Engine;
 
-public interface IDeviceSession<TMessage> : IAsyncDisposable
+using System;
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
+
+public interface IDeviceSession<TMessage> : IAsyncDisposable, IDisposable
 {
     bool IsConnected { get; }
     
-    // 1. 실시간 계측 데이터 스트림 구독 (Request-Stream / Channel)
+    // 1. Real-time telemetry stream subscription (IAsyncEnumerable / Channel)
     IAsyncEnumerable<TMessage> Stream { get; }
     
-    // 2. 단방향 명령 전송 (Fire-and-Forget)
+    // 2. Unidirectional notification / command dispatch (Fire-and-Forget)
     ValueTask SendAsync(TMessage message, CancellationToken ct = default);
     
-    // 3. 요청-응답 RPC (하이브리드 FIFO 락 or 인터리빙 + 워치독 격리)
-    // 단선 시 DeviceDisconnectedException, 타임아웃 시 DeviceTimeoutException 발생 (Fail-Fast)
+    // 3. Request-Response RPC (Hybrid FIFO Lock or Lock-Free Interleaved + Watchdog Isolation)
+    // Throws DeviceDisconnectedException on connection drop, or DeviceTimeoutException on deadline expiry
     ValueTask<TResponse> RequestAsync<TResponse>(TMessage request, TimeSpan timeout, CancellationToken ct = default);
     
-    // 4. 긴급 비상 정지 (Urgent OOB Injection)
+    // 4. Out-of-Band Emergency Stop Injection
     ValueTask SendUrgentAsync(TMessage urgentMessage);
     
     ValueTask StartAsync(CancellationToken ct = default);
@@ -104,26 +114,44 @@ public interface IDeviceSession<TMessage> : IAsyncDisposable
 
 ---
 
-## 4. 산업용 표준 예외 모델 (Fail-Fast Exception Hierarchy)
+## 4. Industrial Fail-Fast Exception Hierarchy
 
 ```csharp
 namespace Kable.Exceptions;
 
+using System;
+
 /// <summary>
-/// 물리/논리 통신선 단선 시 대기 중인 모든 요청에 즉각 발행되는 예외 (Fail-Fast)
+/// Dispatched immediately to all active pending callers upon physical link termination (Fail-Fast).
 /// </summary>
 public class DeviceDisconnectedException : Exception
 {
     public DeviceDisconnectedException(string message) : base(message) { }
+    public DeviceDisconnectedException(string message, Exception innerException) : base(message, innerException) { }
 }
 
 /// <summary>
-/// 장비 펌웨어 묵묵부답 또는 응답 지연 시 워치독에 의해 격리 발행되는 예외
+/// Dispatched when an instrument fails to respond within the configured deadline.
 /// </summary>
 public class DeviceTimeoutException : TimeoutException
 {
+    public string Command { get; }
+    public TimeSpan Timeout { get; }
+
     public DeviceTimeoutException(string command, TimeSpan timeout)
-        : base($"장비 명령 '{command}'이(가) 타임아웃({timeout.TotalSeconds:F1}s) 내에 응답하지 않았습니다.") { }
+        : base($"Device command '{command}' timed out after {timeout.TotalSeconds:F1}s.")
+    {
+        Command = command;
+        Timeout = timeout;
+    }
+}
+
+/// <summary>
+/// Dispatched when frame length bounds or protocol invariants are breached.
+/// </summary>
+public class ProtocolViolationException : Exception
+{
+    public ProtocolViolationException(string message) : base(message) { }
+    public ProtocolViolationException(string message, Exception innerException) : base(message, innerException) { }
 }
 ```
-

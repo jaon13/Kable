@@ -1,56 +1,40 @@
-# 02. 코덱 및 프레이밍 테스트 스펙 (Codec & Framing Tests)
+# 02. Codec & Framing Test Specification
 
-> **문서 상태**: Approved Technical Specification  
-> **대상 모듈**: `Kable.Codecs`, `AsciiLineCodec`, `IProtocolCodec<T>`
-
----
-
-## 1. 개요 및 테스트 목표
-
-통신 라이브러리의 가장 기초적인 방어벽은 **유입되는 원시 바이트 스트림을 안전하고 정확하게 메시지 객체로 복원**하는 코덱 계층입니다.
-본 스펙은 물리적 노이즈, 악의적인 대용량 공격, 네트워크 패킷 분할(Fragmentation), 다국어 인코딩 경계 손상 상황에서도 코덱이 0-Allocation을 유지하며 메모리 누수 없이 동작하는지 검증합니다.
+> **Document Status**: Approved Technical Specification  
+> **Target Modules**: `Kable.Codecs`, `AsciiLineCodec`, `IProtocolCodec<T>`
 
 ---
 
-## 2. 상세 테스트 케이스 정의
+## 1. Overview & Verification Goals
 
-### TC-COD-01: 초대용량 악의적 스트림 유입 시 프레임 상한선 방어 (OOM 방어)
-- **우선순위**: P0
-- **테스트 목적**: 구분자(Delimiter)가 유입되지 않은 상태로 지속적인 데이터가 들어올 때, 메모리가 무한정 증가하지 않고 적절한 방어 메커니즘을 작동시키는지 검증.
-- **사전 조건**: 최대 프레임 허용 버퍼가 설정된 코덱 인스턴스 준비.
-- **테스트 절차**:
-  1. `ReadOnlySequence<byte>`에 구분자 없이 1MB 크기의 무의미한 알파벳 데이터를 다중 세그먼트로 공급.
-  2. `TryDecode(ref buffer, out message)` 실행.
-  3. 버퍼 소비 상태 및 예외 발생 또는 드롭 정책 확인.
-- **기대 결과**: 버퍼가 시스템 메모리를 고갈시키지 않으며, 안전하게 무효화 처리되거나 프레임 크기 초과 정책에 따라 처리됨.
+The framing layer serves as the primary line of defense, safely transforming fragmented or noisy byte streams into typed domain messages without heap allocations. This specification verifies zero-copy decoding across segment boundaries, extreme 1-byte fragmentation, multi-byte UTF-8 preservation, and `MaxFrameSize` overflow protection.
 
-### TC-COD-02: 1바이트 단위 슬라이딩 윈도우 단편화 (Extreme Fragmentation)
-- **우선순위**: P1
-- **테스트 목적**: 100바이트 길이의 정상 메시지("STATUS_REPORT_SAMPLE_123_OK\n")를 1바이트씩 100개의 세그먼트로 잘게 쪼갠 시퀀스 입력 시 완벽하게 복원하는지 검증.
-- **기대 결과**:
-  - `TryDecode`가 정확히 끝 구분자를 감지하고 온전한 문자열 복원.
-  - `ReadOnlySequence`의 잔여 길이가 0이 됨.
+---
 
-### TC-COD-03: 연속된 다중 구분자 및 빈 프레임 연속 처리
-- **우선순위**: P2
-- **테스트 목적**: `\r\n\r\n\n\n`과 같이 구분자만 연속으로 유입될 때 인덱스 예외(IndexOutOfRangeException)나 빈 버퍼 슬라이스 패닉이 발생하지 않는지 검증.
-- **기대 결과**:
-  - 빈 문자열이 안전하게 반환되며 파이프라인 커서가 구분자 크기만큼 정확하게 전진함.
+## 2. Test Cases Specification
 
-### TC-COD-04: 다국어(UTF-8 / EUC-KR) 멀티바이트 중간 절단 경계 테스트
-- **우선순위**: P1
-- **테스트 목적**: 3바이트 UTF-8 한글 문자(예: '가' = `0xEA 0xB0 0x80`)에서 세그먼트 A에 `0xEA 0xB0`, 세그먼트 B에 `0x80`과 개행 문자가 걸쳐있을 때 깨짐 없이 정상 디코딩되는지 검증.
-- **기대 결과**:
-  - `GetStringFromSequence` 호출 시 대여된 ArrayPool 버퍼로 정확히 카피되어 완성된 한글 문자열이 복원됨.
+### TC-COD-01 / TC-COD-101: Infinite Stream Without Delimiter (OOM Defense)
+- **Priority**: P0
+- **Objective**: Verify that continuous stream intake without a valid delimiter throws `ProtocolViolationException` once `MaxFrameSize` (default 64KB) is exceeded, preventing unbounded heap consumption.
+- **Assertion**: `action.Should().Throw<ProtocolViolationException>().WithMessage("*Frame size limit exceeded*");`
 
-### TC-COD-05: ArrayPool 대여/반환 무결성 및 메모리 누수 검증
-- **우선순위**: P0
-- **테스트 목적**: 다중 세그먼트 파싱 시 `ArrayPool<byte>.Shared.Rent()`로 대여한 버퍼가 예외 발생 상황(Malformed Text 등)에서도 `finally` 블록을 통해 반드시 반환되는지 검증.
-- **검증 방법**:
-  - 사용자 지정 `ArrayPool`을 통해 Rent 횟수와 Return 횟수가 1:1로 일치하는지 카운팅 단언.
+### TC-COD-102: Single-Byte Sliding Window Fragmentation
+- **Priority**: P1
+- **Objective**: Verify that a complete message split into 1-byte chunks across individual `ReadOnlySequenceSegment` links is correctly reassembled without byte loss or state corruption.
+- **Assertion**: Decoded message exactly matches the source string and sequence cursor advances cleanly.
 
-### TC-COD-06: 가변 길이 이진(Binary) 헤더 기반 프로토콜 코덱 테스트
-- **우선순위**: P1
-- **테스트 목적**: 개행 기반뿐 아니라 산업용 바이너리 프로토콜(예: 4바이트 Magic + 2바이트 BodyLength + Payload + 2바이트 CRC)을 구현한 커스텀 코덱의 길이 필드 미달 시 안전 대기 검증.
-- **기대 결과**:
-  - 헤더 길이보다 수신 버퍼가 작을 때 즉시 `false`를 반환하고 커서를 전진시키지 않음.
+### TC-COD-103: Consecutive Delimiters & Empty Frames
+- **Priority**: P2
+- **Objective**: Verify that consecutive delimiters (e.g., `\r\n\r\n\n\n`) emit empty string messages without raising index or slice bounds exceptions.
+
+### TC-COD-104: Multi-Byte UTF-8 Characters Across Segment Boundaries
+- **Priority**: P1
+- **Objective**: Verify that 3-byte or 4-byte UTF-8 characters split across separate buffer segments decode without mojibake or byte corruption.
+
+### TC-COD-105: ArrayPool Rent & Return Balance
+- **Priority**: P0
+- **Objective**: Verify that temporary buffers rented from `ArrayPool<byte>.Shared` during multi-segment sequence decoding are guaranteed to return via `finally` blocks even during abnormal terminations.
+
+### TC-COD-106: Binary Length-Prefixed Header Codec
+- **Priority**: P1
+- **Objective**: Verify that custom length-prefixed codecs correctly inspect header size fields and defer decoding until full payload buffers arrive from the transport.

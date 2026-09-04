@@ -1,12 +1,12 @@
-# 06. PerkinElmer Implementation Code (프로덕션 소스코드)
+# 06. PerkinElmer Implementation Code
 
-> 본 문서는 **선언적 RPC 프록시(Refit/gRPC 스타일)**와 **Roslyn Source Generator**를 결합하여, PerkinElmer NexION(Syngistix) 장비 연동 코드를 극도로 슬림하고 우아하게 작성한 `Icpms.PerkinElmer`의 최신 구현입니다.
+> This document provides the declarative RPC implementation for `Icpms.PerkinElmer`, demonstrating modern type-safe hardware communication over `Kable`.
 
 ---
 
-## 1. [선언적 RPC 인터페이스] Syngistix RPC 선언 (`ISyngistixRpcClient.cs`)
+## 1. Declarative RPC Interface (`ISyngistixRpcClient.cs`)
 
-> 지루한 TCP 소켓 파싱이나 `RequestAsync` 반복 작성 없이, **원격 RPC 인터페이스만 선언**하면 컴파일러가 프록시 구현체를 자동 생성합니다:
+By declaring the typed RPC interface, the compile-time generator automatically provides proxy implementations:
 
 ```csharp
 namespace Icpms.PerkinElmer.Protocol;
@@ -38,7 +38,7 @@ public interface ISyngistixRpcClient
 
 ---
 
-## 2. [컴팩트 모델] 패킷 및 이벤트 정의 (`PerkinElmerPackets.cs`)
+## 2. Inbound Packet & Event Models (`PerkinElmerPackets.cs`)
 
 ```csharp
 namespace Icpms.PerkinElmer.Protocol;
@@ -59,9 +59,7 @@ public readonly record struct PeAcquisitionCompletedEvent(
 
 ---
 
-## 3. [비즈니스 드라이버] 순수 오케스트레이터 (`PerkinElmerDeviceDriver.cs`)
-
-> 생성된 RPC 프록시 클라이언트를 직접 주입받아, 비즈니스 흐름이 마치 일반 C# 로컬 함수 호출하듯 깔끔하게 읽힙니다.
+## 3. Production Driver Orchestrator (`PerkinElmerDeviceDriver.cs`)
 
 ```csharp
 namespace Icpms.PerkinElmer;
@@ -71,7 +69,7 @@ using Icpms.PerkinElmer.Protocol;
 public sealed class PerkinElmerDeviceDriver : IIcpmsDriver
 {
     private readonly ISyngistixRpcClient _rpc;
-    private BatchRunStatus _batchRunStatus = new("NONE", "", 0, 0, false, "대기 중");
+    private BatchRunStatus _batchRunStatus = new("NONE", "", 0, 0, false, "Idle");
 
     public PerkinElmerDeviceDriver(ISyngistixRpcClient rpc) => _rpc = rpc;
 
@@ -92,31 +90,31 @@ public sealed class PerkinElmerDeviceDriver : IIcpmsDriver
         var sampleList = samples.ToList();
         string firstSample = sampleList.FirstOrDefault() ?? "SMP-BLANK";
 
-        // 직관적인 3단계 시퀀스: 메소드 로드 -> 펌프 가동 -> 분석 시작
+        // 3-step sequence: Load method -> Start pump -> Trigger acquisition
         await _rpc.LoadMethodAsync(@"C:\PE\Methods", "TraceMetals.mth", ct);
         await _rpc.StartPumpAsync(20.0, ct);
         await _rpc.StartAcquisitionAsync(firstSample, ct);
 
-        _batchRunStatus = new BatchRunStatus(batchName, firstSample, 1, sampleList.Count, true, "PerkinElmer 배치 실행 중");
+        _batchRunStatus = new BatchRunStatus(batchName, firstSample, 1, sampleList.Count, true, "Running");
         return _batchRunStatus;
     }
 
     public async Task<bool> AbortBatchAsync(CancellationToken ct = default)
     {
         await _rpc.StopAcquisitionUrgentAsync();
-        _batchRunStatus = _batchRunStatus with { IsRunning = false, StatusMessage = "긴급 중단됨" };
+        _batchRunStatus = _batchRunStatus with { IsRunning = false, StatusMessage = "Aborted" };
         return true;
     }
 
     public Task<BatchRunStatus> GetBatchStatusAsync(CancellationToken ct = default) => Task.FromResult(_batchRunStatus);
     public Task<PlasmaState> GetPlasmaStateAsync(CancellationToken ct = default)
-        => Task.FromResult(new PlasmaState(PlasmaStatus.On, 1400.0, 500.0, 1.0e-3, 19.0, "정상"));
+        => Task.FromResult(new PlasmaState(PlasmaStatus.On, 1400.0, 500.0, 1.0e-3, 19.0, "Normal"));
 }
 ```
 
 ---
 
-## 4. DI 서비스 등록 확장 메서드 (`PerkinElmerServiceExtensions.cs`)
+## 4. DI Registration Extensions (`PerkinElmerServiceExtensions.cs`)
 
 ```csharp
 namespace Microsoft.Extensions.DependencyInjection;
@@ -132,13 +130,11 @@ public static class PerkinElmerServiceExtensions
         string hostIp = "192.168.1.120",
         int tcpPort = 50051)
     {
-        // 1. 소스 생성기가 만든 RPC 프록시 클라이언트 바인딩
         services.AddDeviceRpcClient<ISyngistixRpcClient>(options =>
         {
             options.UseSocket(hostIp, tcpPort);
         });
 
-        // 2. 비즈니스 드라이버 등록
         services.AddSingleton<IIcpmsDriver, PerkinElmerDeviceDriver>();
         return services;
     }
