@@ -19,6 +19,16 @@
 
 ---
 
+## 🏛️ SSOT 표준 규격 문서군 (Project Specifications & Rules)
+- **[PROJECT_SPEC.md (프로젝트 상세 규격서)](file:///d:/Johnny/Kable/docs/PROJECT_SPEC.md)**: 미션, 4대 확정 원칙, 3단 계층 아키텍처 토폴로지
+- **[SYSTEM_DESIGN.md (시스템 설계 및 인터페이스 규격서)](file:///d:/Johnny/Kable/docs/SYSTEM_DESIGN.md)**: Bedrock IConnectionContext, Codec, IDeviceSession 상호작용
+- **[CONVENTIONS.md (코딩 표준 및 엄격한 금지 규칙)](file:///d:/Johnny/Kable/docs/CONVENTIONS.md)**: 300~500줄 제한, 동기 블로킹 금지, Zero-GC 스타일
+- **[AGENTS.md (최상위 AI 에이전트 규칙)](file:///d:/Johnny/Kable/AGENTS.md)**: 단일 진실 공급원 준수, TDD 및 마이크로 커밋 원칙
+- **[CONTRIBUTING.md (개발 및 기여 가이드라인)](file:///d:/Johnny/Kable/CONTRIBUTING.md)**: Multi-Targeting, PR 가이드
+- **[CHANGELOG.md (버전별 릴리스 변경 이력)](file:///d:/Johnny/Kable/CHANGELOG.md)**: Semantic Versioning 이력
+
+---
+
 ## 📚 상세 문서 목차
 
 아래 링크를 통해 세부 주제별 사양서로 바로 이동하실 수 있습니다:
