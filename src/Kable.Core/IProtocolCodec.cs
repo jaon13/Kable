@@ -1,4 +1,4 @@
-﻿namespace Kable.Codecs;
+namespace Kable.Codecs;
 
 using System.Buffers;
 

@@ -19,6 +19,11 @@
     <RepositoryUrl>https://github.com/jaon13/Kable</RepositoryUrl>
   </PropertyGroup>
 
+  <!-- 프로젝트 참조 (Kable.Core 계약 계층) -->
+  <ItemGroup>
+    <ProjectReference Include="..\Kable.Core\Kable.Core.csproj" />
+  </ItemGroup>
+
   <!-- 공통 종속성 (최신 System.Threading.Channels 포함) -->
   <ItemGroup>
     <PackageReference Include="System.IO.Pipelines" Version="8.0.0" />

@@ -1,4 +1,4 @@
-﻿namespace Kable.Core;
+namespace Kable.Core;
 
 using System;
 using System.IO.Pipelines;
