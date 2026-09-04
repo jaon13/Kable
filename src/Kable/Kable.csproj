@@ -16,10 +16,10 @@
     <PackageTags>industrial;hardware;serial;socket;namedpipe;pipelines;rsocket;reactive;zerogc</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <RepositoryType>git</RepositoryType>
-    <RepositoryUrl>https://github.com/johnny/Kable</RepositoryUrl>
+    <RepositoryUrl>https://github.com/jaon13/Kable</RepositoryUrl>
   </PropertyGroup>
 
-  <!-- 공통 종속성 -->
+  <!-- 공통 종속성 (최신 System.Threading.Channels 포함) -->
   <ItemGroup>
     <PackageReference Include="System.IO.Pipelines" Version="8.0.0" />
     <PackageReference Include="System.Threading.Channels" Version="8.0.0" />
