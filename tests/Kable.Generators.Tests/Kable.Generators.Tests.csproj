@@ -19,7 +19,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Kable.Generators\Kable.Generators.csproj" 
                       OutputItemType="Analyzer" 
-                      ReferenceOutputAssembly="false" />
+                      ReferenceOutputAssembly="true" />
   </ItemGroup>
 
 </Project>
