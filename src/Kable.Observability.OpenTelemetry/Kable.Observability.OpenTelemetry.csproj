@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net10.0;net8.0</TargetFrameworks>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <PackageId>Kable.Observability.OpenTelemetry</PackageId>
+    <Version>1.0.0</Version>
+    <Authors>Johnny</Authors>
+    <Description>OpenTelemetry and System.Diagnostics.Metrics bridge adapter for Kable reactive communication engine.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Kable.Core\Kable.Core.csproj" />
+  </ItemGroup>
+
+</Project>
