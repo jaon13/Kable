@@ -5,6 +5,7 @@
 
 # dotenv files
 .env
+.code_graph/
 
 # User-specific files
 *.rsuser
