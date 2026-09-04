@@ -1,4 +1,4 @@
-﻿# 🔌 Kable
+# 🔌 Kable
 
 > **High-Performance, Zero-Allocation Reactive Hardware Communication Engine for .NET**  
 > Combining Microsoft Bedrock's `System.IO.Pipelines` transport abstraction with RSocket interaction patterns.
@@ -19,31 +19,42 @@
 
 ## 🚀 Quick Start
 
-```bash
-dotnet add package Kable
-```
+### 1. Fluent Builder (`KableClientBuilder`)
 
 ```csharp
-using Kable.Core;
-using Kable.Engine;
+using Kable.Extensions;
 using Kable.Codecs;
 
-// 1. Create a reactive Kable session
-await using var session = new KableSession<string>(
-    connectionFactory: connectionFactory,
-    codec: new AsciiLineCodec()
-);
+// Connect via TCP, Serial Port, or NamedPipe in 3 lines:
+await using var session = new KableClientBuilder<string>()
+    .UseTcp("192.168.0.100", 9000)
+    // .UseSerialPort("COM3", baudRate: 9600)
+    // .UseNamedPipe("local_hardware_pipe")
+    .UseCodec(new AsciiLineCodec(delimiter: 0x0A))
+    .Build();
 
 await session.StartAsync();
 
-// 2. Request-Response with Fail-Fast Watchdog
+// Request-Response with Fail-Fast Watchdog
 string response = await session.RequestAsync<string>("START_ACQUISITION", TimeSpan.FromSeconds(3));
 
-// 3. Subscribe to Real-time Stream
+// Subscribe to Real-time Stream
 await foreach (var packet in session.Stream)
 {
     Console.WriteLine($"Received telemetry: {packet}");
 }
+```
+
+### 2. Dependency Injection (`Microsoft.Extensions.DependencyInjection`)
+
+```csharp
+builder.Services.AddKable(); // Registers ICommObserver (3-channel ringbuffer)
+
+builder.Services.AddKableSession<string>((client, sp) =>
+{
+    client.UseSerialPort("COM3", baudRate: 9600)
+          .UseCodec(new AsciiLineCodec(delimiter: 0x0D));
+});
 ```
 
 ---

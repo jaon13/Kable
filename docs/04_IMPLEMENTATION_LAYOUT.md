@@ -25,10 +25,10 @@ Kable/                                         # [별도 독립 Git 저장소 �
 │   │   │   └── IConnectionListener.cs         # 서버 리스너 인터페이스 (AcceptAsync)
 │   │   │
 │   │   ├── Transports/                        # [Transport Plugins]
-│   │   │   ├── SocketConnectionContext.cs    # TCP Active 클라이언트 (L4 KeepAlive 1s/3회 프로브)
-│   │   │   ├── SocketConnectionListener.cs   # TCP Passive 서버 리스너
-│   │   │   ├── NamedPipeConnectionContext.cs # 고속 로컬 프로세스 IPC 클라이언트
-│   │   │   └── SerialConnectionContext.cs    # RS-232/422/485 물리 COM 포트 (BaudRate, DTR/RTS)
+│   │   │   ├── TcpConnection.cs               # TCP Active 클라이언트 (L4 KeepAlive 1s/3회 프로브)
+│   │   │   ├── TcpListener.cs                 # TCP Passive 서버 리스너 (IConnectionListener)
+│   │   │   ├── NamedPipeConnection.cs         # 고속 로컬 프로세스 IPC 클라이언트
+│   │   │   └── SerialPortConnection.cs        # RS-232/422/485 물리 COM 포트 (BaudRate, DTR/RTS)
 │   │   │
 │   │   ├── Codecs/                            # [Zero-Allocation Codecs]
 │   │   │   ├── IProtocolCodec.cs             # TryDecode / Encode / SupportsCorrelationId
