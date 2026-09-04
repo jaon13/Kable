@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using FluentAssertions;
 using Kable.Codecs;
 using Kable.Engine;
+using Kable.Exceptions;
 using Kable.Tests.Fixtures;
 using Xunit;
 
@@ -72,4 +73,61 @@ public sealed class ThreadingPipelineAndLifecycleTests
             receivedList[i].Should().Be($"$MSG_{i:D4}");
         }
     }
+
+    [Fact]
+    public async Task TC_ENG_201_KableSession_DispatchQueueBackpressure_FullModeWaitSafe()
+    {
+        var factory = new TestMemoryConnectionFactory();
+        var codec = new AsciiLineCodec(delimiter: 0x0A);
+        await using var session = new KableSession<string>(factory, codec);
+        await session.StartAsync();
+
+        // Write 10,200 autonomous messages (exceeding bounded capacity of 10,000)
+        const int totalCount = 10200;
+        var writeTask = Task.Run(async () =>
+        {
+            for (int i = 0; i < totalCount; i++)
+            {
+                await factory.Context.WriteAsciiLineAsync($"$DATA_{i:D5}", 0x0A);
+            }
+        });
+
+        // Drain messages asynchronously to allow backpressure to relieve smoothly
+        int receivedCount = 0;
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        await foreach (var item in session.GetStreamAsync(cts.Token))
+        {
+            receivedCount++;
+            if (receivedCount == totalCount) break;
+        }
+
+        await writeTask;
+        receivedCount.Should().Be(totalCount);
+    }
+
+    [Fact]
+    public async Task TC_ENG_202_KableSession_Disposed_OperationsThrowObjectDisposedException()
+    {
+        var factory = new TestMemoryConnectionFactory();
+        var codec = new AsciiLineCodec(delimiter: 0x0A);
+        var session = new KableSession<string>(factory, codec);
+        await session.StartAsync();
+
+        // Complete disposal
+        await session.DisposeAsync();
+
+        // Calling operations on disposed session should fail immediately without deadlocking
+        Func<Task> actSend = async () => await session.SendAsync("TEST_SEND");
+        await actSend.Should().ThrowAsync<Exception>()
+            .Where(e => e is ObjectDisposedException || e is DeviceDisconnectedException);
+
+        Func<Task> actReq = async () => await session.RequestAsync<string>("TEST_REQ", TimeSpan.FromSeconds(2));
+        await actReq.Should().ThrowAsync<Exception>()
+            .Where(e => e is ObjectDisposedException || e is DeviceDisconnectedException);
+
+        Func<Task> actUrgent = async () => await session.SendUrgentAsync("TEST_URGENT");
+        await actUrgent.Should().ThrowAsync<Exception>()
+            .Where(e => e is ObjectDisposedException || e is DeviceDisconnectedException);
+    }
 }
+

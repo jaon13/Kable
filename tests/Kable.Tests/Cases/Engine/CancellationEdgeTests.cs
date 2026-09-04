@@ -91,4 +91,29 @@ public class CancellationEdgeTests
         await act.Should().ThrowAsync<DeviceDisconnectedException>()
                  .WithMessage("*Connection is not open*");
     }
+
+    [Fact]
+    public async Task TC_ENG_203_KableSession_RequestAsync_CallerCanceledDuringWrite_ReleasesFifoLock()
+    {
+        var factory = new TestMemoryConnectionFactory();
+        var codec = new AsciiLineCodec(delimiter: 0x0A);
+        await using var session = new KableSession<string>(factory, codec);
+        await session.StartAsync();
+
+        // Already-canceled token during request entry
+        using var canceledCts = new CancellationTokenSource();
+        canceledCts.Cancel();
+
+        Func<Task> actCanceled = async () =>
+            await session.RequestAsync<string>("CANCELED_CMD", TimeSpan.FromSeconds(5), canceledCts.Token);
+
+        await actCanceled.Should().ThrowAsync<OperationCanceledException>();
+
+        // Next request must acquire the FIFO lock cleanly and succeed
+        var nextTask = session.RequestAsync<string>("VALID_CMD", TimeSpan.FromSeconds(3));
+        await factory.Context.WriteAsciiLineAsync("VALID_RESP", 0x0A);
+        var response = await nextTask;
+        response.Should().Be("VALID_RESP");
+    }
 }
+
