@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using FluentAssertions;
 using Kable.Codecs;
 using Kable.Engine;
+using Kable.Exceptions;
 using Kable.Tests.Fixtures;
 using Xunit;
 
@@ -47,7 +48,6 @@ public class CancellationEdgeTests
         using var canceledCts = new CancellationTokenSource();
         canceledCts.Cancel();
 
-
         Func<Task> act = async () => await session.RequestAsync<string>("NEVER_SENT", TimeSpan.FromSeconds(2), canceledCts.Token);
         await act.Should().ThrowAsync<OperationCanceledException>();
 
@@ -55,5 +55,40 @@ public class CancellationEdgeTests
         await factory.Context.WriteAsciiLineAsync("FOLLOW_UP_ACK", 0x0A);
         var res = await followUpTask;
         res.Should().Be("FOLLOW_UP_ACK");
+    }
+
+    [Fact]
+    public async Task TC_SES_110_RequestAsync_InvalidCastException_ReleasesFifoLockSafely()
+    {
+        var factory = new TestMemoryConnectionFactory();
+        var codec = new AsciiLineCodec(delimiter: 0x0A);
+        await using var session = new KableSession<string>(factory, codec);
+        await session.StartAsync();
+
+        // Request expecting an incompatible type (e.g. int when response is string)
+        var castFailTask = session.RequestAsync<int>("CMD_CAST_FAIL", TimeSpan.FromSeconds(3)).AsTask();
+        await factory.Context.WriteAsciiLineAsync("TEXT_RESPONSE", 0x0A);
+
+        Func<Task> actCast = async () => await castFailTask;
+        await actCast.Should().ThrowAsync<InvalidCastException>();
+
+        // Next request must acquire the lock immediately and succeed
+        var nextTask = session.RequestAsync<string>("CMD_NEXT", TimeSpan.FromSeconds(3));
+        await factory.Context.WriteAsciiLineAsync("NEXT_OK", 0x0A);
+        var nextRes = await nextTask;
+        nextRes.Should().Be("NEXT_OK");
+    }
+
+    [Fact]
+    public async Task TC_SES_111_RequestAsync_NotConnected_ThrowsDeviceDisconnectedExceptionImmediately()
+    {
+        var factory = new TestMemoryConnectionFactory();
+        var codec = new AsciiLineCodec(delimiter: 0x0A);
+        await using var session = new KableSession<string>(factory, codec);
+
+        // Session not started: calling RequestAsync must fail-fast without waiting for timeout
+        Func<Task> act = async () => await session.RequestAsync<string>("PING_OFFLINE", TimeSpan.FromSeconds(5));
+        await act.Should().ThrowAsync<DeviceDisconnectedException>()
+                 .WithMessage("*연결이 열려 있지 않습니다*");
     }
 }

@@ -50,6 +50,27 @@ public class TcpListenerAndDiTests
     }
 
     [Fact]
+    public async Task TC_TRN_107_TcpConnectionListener_Stop_ReleasesSocketAndAllowsPortReuse()
+    {
+        int port;
+        {
+            var listener = new TcpConnectionListener(IPAddress.Loopback, 0);
+            port = ((IPEndPoint)listener.LocalEndPoint).Port;
+            listener.Stop();
+            await listener.DisposeAsync();
+        }
+
+        // Port must be immediately re-bindable without SocketException
+        var rebindAction = () =>
+        {
+            var newListener = new TcpConnectionListener(IPAddress.Loopback, port);
+            newListener.Stop();
+        };
+
+        rebindAction.Should().NotThrow<System.Net.Sockets.SocketException>();
+    }
+
+    [Fact]
     public void ServiceCollection_AddKableAndSession_ResolvesCorrectly()
     {
         var services = new ServiceCollection();
