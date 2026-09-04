@@ -1,4 +1,4 @@
-﻿# LIMS 차세대 통합 통신 아키텍처 및 구현 계획 (INDEX)
+# LIMS 차세대 통합 통신 아키텍처 및 구현 계획 (INDEX)
 
 > 본 문서는 `CommModule_NVISANA` 레거시 통신 모듈의 부채를 완전 청산하고, **Bedrock의 전송 추상화(하부: Pipelines/ConnectionContext) + RSocket의 상호작용 API(상부: Request/Send/Stream)** 철학을 결합하여 장비 물리 통신(TCP, Serial)과 로컬 프로세스 연동(NamedPipe IPC)을 단일화하는 산업용 표준 통신 도관 라이브러리 **`Kable`**의 종합 색인(INDEX)입니다.
 
@@ -51,4 +51,11 @@
 - **[04. Agilent Implementation Code](file:///d:/Johnny/Kable/docs/05_ICP_MS_CASE_STUDY/04_AGILENT_IMPLEMENTATION_CODE.md)**: `Icpms.MassHunter` 독립 모듈 프로덕션 소스코드 및 DI 등록
 - **[05. PerkinElmer Syngistix Spec & Design](file:///d:/Johnny/Kable/docs/05_ICP_MS_CASE_STUDY/05_PERKINELMER_SYNGISTIX.md)**: `RemoteSyngistix.cs` 역설계 분석, RPC 명세표, 시퀀스 타이밍 차트
 - **[06. PerkinElmer Implementation Code](file:///d:/Johnny/Kable/docs/05_ICP_MS_CASE_STUDY/06_PERKINELMER_IMPLEMENTATION.md)**: `Icpms.PerkinElmer` 독립 모듈 프로덕션 소스코드 및 DI 등록
+
+### 6. [06. Test Engineering & QA Master Plan (테스트 엔지니어링 및 결함 방어 계획)](file:///d:/Johnny/Kable/docs/qa_test_engineering/INDEX.md)
+- **[01. Gap Analysis](file:///d:/Johnny/Kable/docs/qa_test_engineering/01_GAP_ANALYSIS.md)**: 현행 75개 테스트의 강점 분석, 미검증 6대 사각지대(Dead Zones) 정밀 식별
+- **[02. Codec & Framing Tests](file:///d:/Johnny/Kable/docs/qa_test_engineering/02_CODEC_AND_FRAMING_TESTS.md)**: OOM 방어, 1바이트 슬라이딩 윈도우, ArrayPool 대여/반환 무결성
+- **[03. Session Concurrency Tests](file:///d:/Johnny/Kable/docs/qa_test_engineering/03_SESSION_CONCURRENCY_TESTS.md)**: 200개 동시 요청 FIFO 락 공정성, 타임아웃 지연 패킷 격리, 대규모 단선 Fail-Fast
+- **[04. Transport Fault Injection Tests](file:///d:/Johnny/Kable/docs/qa_test_engineering/04_TRANSPORT_FAULT_INJECTION_TESTS.md)**: TCP RST, NamedPipe 프로세스 Crash, SerialPort 케이블 탈락, 배압 제어
+- **[05. All New Test Cases Catalog](file:///d:/Johnny/Kable/docs/qa_test_engineering/05_ALL_NEW_TEST_CASES_CATALOG.md)**: 신규 투입 대상 24개 테스트 케이스 전수 카탈로그 매트릭스
 
