@@ -329,4 +329,16 @@ public class TransportFaultInjectionTests
         await act.Should().ThrowAsync<Exception>()
            .Where(e => e is SocketException || e is OperationCanceledException);
     }
+
+    [Fact]
+    public async Task TC_TRN_108_NamedPipe_NonExistentServer_ConnectAsyncTimesOutCleanly()
+    {
+        string nonExistentPipe = "non_existent_pipe_" + Guid.NewGuid().ToString("N");
+        var factory = new NamedPipeConnectionFactory(nonExistentPipe, timeoutMs: 300);
+
+        using var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(2));
+        Func<Task> act = async () => await factory.ConnectAsync(cts.Token);
+
+        await act.Should().ThrowAsync<TimeoutException>();
+    }
 }

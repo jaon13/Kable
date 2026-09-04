@@ -1,6 +1,8 @@
 namespace Kable.Tests.Cases;
 
 using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using FluentAssertions;
 using Kable.Codecs;
@@ -54,15 +56,12 @@ public class TelemetryRingBufferTests
         await using var session = new KableSession<string>(factory, codec, mockObserver);
         await session.StartAsync();
 
-
         await factory.Context.WriteAsciiLineAsync("$ALARM_HIGH_TEMP", 0x0A);
         await Task.Delay(50);
-
 
         var reqTask = session.RequestAsync<string>("GET_STATUS", TimeSpan.FromSeconds(2));
         await factory.Context.WriteAsciiLineAsync("STATUS_READY", 0x0A);
         await reqTask;
-
 
         mockObserver.Received().OnPacketTrace(Arg.Is<PacketTraceRecord>(r =>
             r.Kind == TrafficKind.SpontaneousAlarm &&
@@ -71,5 +70,43 @@ public class TelemetryRingBufferTests
         mockObserver.Received().OnPacketTrace(Arg.Is<PacketTraceRecord>(r =>
             r.Kind == TrafficKind.AperiodicCommand &&
             r.ParsedText == "STATUS_READY"));
+    }
+
+    [Fact]
+    public void TC_OBS_101_CommObserver_MultiThreadedBursts_MaintainsZeroLossInCommands()
+    {
+        // 50 concurrent tasks writing 20 records each (total 1000 records) to an observer with capacity 2000
+        var observer = new CommObserver(bufferCapacity: 2000);
+        int tasksCount = 50;
+        int perTaskCount = 20;
+
+        Parallel.For(0, tasksCount, taskId =>
+        {
+            for (int i = 0; i < perTaskCount; i++)
+            {
+                observer.OnPacketTrace(new PacketTraceRecord(
+                    DateTime.UtcNow,
+                    PacketDirection.Tx,
+                    TrafficKind.AperiodicCommand,
+                    "CMD",
+                    ReadOnlyMemory<byte>.Empty,
+                    $"CMD_{taskId}_{i}",
+                    TimeSpan.Zero));
+            }
+        });
+
+        int totalRead = 0;
+        var received = new HashSet<string>();
+        while (observer.CommandStream.TryRead(out var rec))
+        {
+            totalRead++;
+            if (rec.ParsedText != null)
+            {
+                received.Add(rec.ParsedText);
+            }
+        }
+
+        totalRead.Should().Be(tasksCount * perTaskCount);
+        received.Count.Should().Be(tasksCount * perTaskCount);
     }
 }
