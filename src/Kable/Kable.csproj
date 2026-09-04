@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <!-- 전천후 멀티 타겟팅: 구형 설비(netstandard2.0)부터 최신 고성능(.NET 8, 10)까지 완전 지원 -->
@@ -24,6 +24,7 @@
     <PackageReference Include="System.IO.Pipelines" Version="8.0.0" />
     <PackageReference Include="System.Threading.Channels" Version="8.0.0" />
     <PackageReference Include="System.IO.Ports" Version="8.0.0" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="8.0.0" />
   </ItemGroup>
 
   <!-- netstandard2.0 구형 플랫폼용 폴리필 패키지 -->

@@ -1,4 +1,4 @@
-﻿namespace Kable.Engine;
+namespace Kable.Engine;
 
 using System;
 using System.Collections.Concurrent;
@@ -267,5 +267,10 @@ public sealed class KableSession<TMessage> : IDeviceSession<TMessage>
         await StopAsync().ConfigureAwait(false);
         _fifoLock.Dispose();
         _sessionCts.Dispose();
+    }
+
+    public void Dispose()
+    {
+        DisposeAsync().AsTask().GetAwaiter().GetResult();
     }
 }

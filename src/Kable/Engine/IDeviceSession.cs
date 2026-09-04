@@ -1,11 +1,11 @@
-﻿namespace Kable.Engine;
+namespace Kable.Engine;
 
 using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 
-public interface IDeviceSession<TMessage> : IAsyncDisposable
+public interface IDeviceSession<TMessage> : IAsyncDisposable, IDisposable
 {
     bool IsConnected { get; }
     IAsyncEnumerable<TMessage> Stream { get; }
