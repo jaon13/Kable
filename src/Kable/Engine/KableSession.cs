@@ -90,7 +90,15 @@ public sealed class KableSession<TMessage> : IDeviceSession<TMessage>
                 _currentFifoTcs = tcs;
 
                 _codec.Encode(request, _context!.Output);
-                await _context.Output.FlushAsync(ct).ConfigureAwait(false);
+                try
+                {
+                    await _context.Output.FlushAsync(ct).ConfigureAwait(false);
+                }
+                catch (Exception ex) when (ex is System.IO.IOException or System.Net.Sockets.SocketException)
+                {
+                    OnConnectionClosed();
+                    throw new DeviceDisconnectedException("데이터 송신 중 하드웨어 연결이 끊어졌습니다.", ex);
+                }
 
                 using var timeoutCts = new CancellationTokenSource(timeout);
                 using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct, timeoutCts.Token);
@@ -132,7 +140,15 @@ public sealed class KableSession<TMessage> : IDeviceSession<TMessage>
             try
             {
                 _codec.Encode(request, _context!.Output);
-                await _context.Output.FlushAsync(ct).ConfigureAwait(false);
+                try
+                {
+                    await _context.Output.FlushAsync(ct).ConfigureAwait(false);
+                }
+                catch (Exception ex) when (ex is System.IO.IOException or System.Net.Sockets.SocketException)
+                {
+                    OnConnectionClosed();
+                    throw new DeviceDisconnectedException("데이터 송신 중 하드웨어 연결이 끊어졌습니다.", ex);
+                }
 
                 using var timeoutCts = new CancellationTokenSource(timeout);
                 using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct, timeoutCts.Token);

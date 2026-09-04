@@ -17,16 +17,22 @@ public sealed class SerialPortConnectionContext : IConnectionContext
     public string EndpointDescription { get; }
     public PipeReader Input { get; }
     public PipeWriter Output { get; }
-    public CancellationToken ConnectionClosed => _cts.Token;
+    public CancellationToken ConnectionClosed { get; }
 
     public SerialPortConnectionContext(SerialPort port)
+        : this(port, port.BaseStream)
+    {
+    }
+
+    internal SerialPortConnectionContext(SerialPort port, System.IO.Stream stream)
     {
         _port = port;
         ConnectionId = Guid.NewGuid().ToString("N");
         EndpointDescription = $"Serial {port.PortName} ({port.BaudRate},{port.DataBits},{port.Parity},{port.StopBits})";
+        ConnectionClosed = _cts.Token;
 
-        Input = PipeReader.Create(port.BaseStream);
-        Output = PipeWriter.Create(port.BaseStream);
+        Input = PipeReader.Create(stream);
+        Output = PipeWriter.Create(stream);
     }
 
     public void Abort(string reason)
@@ -43,8 +49,8 @@ public sealed class SerialPortConnectionContext : IConnectionContext
         if (Interlocked.Exchange(ref _isDisposed, 1) == 0)
         {
             _cts.Cancel();
-            await Input.CompleteAsync().ConfigureAwait(false);
-            await Output.CompleteAsync().ConfigureAwait(false);
+            try { await Input.CompleteAsync().ConfigureAwait(false); } catch { }
+            try { await Output.CompleteAsync().ConfigureAwait(false); } catch { }
             _port.Dispose();
             _cts.Dispose();
         }

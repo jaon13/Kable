@@ -46,8 +46,8 @@ public sealed class TcpConnectionContext : IConnectionContext
         if (Interlocked.Exchange(ref _isDisposed, 1) == 0)
         {
             _cts.Cancel();
-            await Input.CompleteAsync().ConfigureAwait(false);
-            await Output.CompleteAsync().ConfigureAwait(false);
+            try { await Input.CompleteAsync().ConfigureAwait(false); } catch { }
+            try { await Output.CompleteAsync().ConfigureAwait(false); } catch { }
 #if NETSTANDARD2_0
             _stream.Dispose();
 #else

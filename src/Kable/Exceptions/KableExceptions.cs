@@ -1,4 +1,4 @@
-﻿namespace Kable.Exceptions;
+namespace Kable.Exceptions;
 
 using System;
 
@@ -14,9 +14,15 @@ public class DeviceTimeoutException : TimeoutException
     public TimeSpan Timeout { get; }
 
     public DeviceTimeoutException(string command, TimeSpan timeout)
-        : base($"장비 명령 '{command}'이(가) 타임아웃({timeout.TotalSeconds:F1}s) 내에 응답하지 않았습니다.")
+        : base($"Device command '{command}' timed out after {timeout.TotalSeconds:F1}s.")
     {
         Command = command;
         Timeout = timeout;
     }
+}
+
+public class ProtocolViolationException : Exception
+{
+    public ProtocolViolationException(string message) : base(message) { }
+    public ProtocolViolationException(string message, Exception innerException) : base(message, innerException) { }
 }
