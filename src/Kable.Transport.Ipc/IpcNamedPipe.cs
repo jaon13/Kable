@@ -128,15 +128,21 @@ public sealed class IpcNamedPipeServerListener : IConnectionListener
         try { _currentServerStream?.Close(); } catch { }
     }
 
-    public ValueTask DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
-        StopAsync();
-        return default;
-    }
-
-    private void StopAsync()
-    {
-        Stop();
+        _cts.Cancel();
+        if (_currentServerStream != null)
+        {
+            try
+            {
+#if NETSTANDARD2_0
+                _currentServerStream.Dispose();
+#else
+                await _currentServerStream.DisposeAsync().ConfigureAwait(false);
+#endif
+            }
+            catch { }
+        }
         _cts.Dispose();
     }
 }

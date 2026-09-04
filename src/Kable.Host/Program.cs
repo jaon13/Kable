@@ -22,6 +22,8 @@ public static class Program
 
         await using var listener = new IpcNamedPipeServerListener(pipeName);
 
+        var activeSessions = new System.Collections.Concurrent.ConcurrentDictionary<string, Task>();
+
         try
         {
             while (!cts.IsCancellationRequested)
@@ -31,7 +33,7 @@ public static class Program
                 Console.WriteLine($"[Kable.Host] Client connected: {context.ConnectionId} ({context.EndpointDescription})");
 
                 // Echo / Forwarding Bridge
-                _ = Task.Run(async () =>
+                var sessionTask = Task.Run(async () =>
                 {
                     try
                     {
@@ -63,12 +65,20 @@ public static class Program
                     finally
                     {
                         await context.DisposeAsync();
+                        activeSessions.TryRemove(context.ConnectionId, out _);
                     }
                 }, cts.Token);
+
+                activeSessions[context.ConnectionId] = sessionTask;
             }
         }
         catch (OperationCanceledException)
         {
+            Console.WriteLine("[Kable.Host] Daemon stopping. Joining active sessions...");
+            if (!activeSessions.IsEmpty)
+            {
+                await Task.WhenAny(Task.WhenAll(activeSessions.Values), Task.Delay(2000));
+            }
             Console.WriteLine("[Kable.Host] Daemon stopped cleanly.");
         }
     }

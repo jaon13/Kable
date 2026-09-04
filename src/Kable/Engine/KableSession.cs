@@ -227,9 +227,9 @@ public sealed class KableSession<TMessage> : IDeviceSession<TMessage>
 
     private async Task DispatchLoopAsync()
     {
+        var reader = _dispatchQueue.Reader;
         try
         {
-            var reader = _dispatchQueue.Reader;
             while (await reader.WaitToReadAsync(_sessionCts.Token).ConfigureAwait(false))
             {
                 while (reader.TryRead(out var message))
@@ -238,9 +238,17 @@ public sealed class KableSession<TMessage> : IDeviceSession<TMessage>
                 }
             }
         }
-        catch
+        catch (OperationCanceledException)
         {
-            // 세션 취소 시 안전 종료
+            // 세션 종료 신호 시 잔여 큐 패킷 즉시 드레인 처리
+        }
+        finally
+        {
+            // 잔여 인플라이트 패킷 드레인
+            while (reader.TryRead(out var residualMessage))
+            {
+                DispatchMessage(residualMessage);
+            }
         }
     }
 
