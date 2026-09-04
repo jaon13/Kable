@@ -27,6 +27,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Kable.Engine.Disruptor.Test
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Kable.Transport.Ipc.Tests", "tests\Kable.Transport.Ipc.Tests\Kable.Transport.Ipc.Tests.csproj", "{5538CFD7-2520-4766-90F7-7A557A43A029}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Kable.Host.Tests", "tests\Kable.Host.Tests\Kable.Host.Tests.csproj", "{4B110C75-6F90-4BE1-84FC-001902ED0F8F}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -157,6 +159,18 @@ Global
 		{5538CFD7-2520-4766-90F7-7A557A43A029}.Release|x64.Build.0 = Release|Any CPU
 		{5538CFD7-2520-4766-90F7-7A557A43A029}.Release|x86.ActiveCfg = Release|Any CPU
 		{5538CFD7-2520-4766-90F7-7A557A43A029}.Release|x86.Build.0 = Release|Any CPU
+		{4B110C75-6F90-4BE1-84FC-001902ED0F8F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4B110C75-6F90-4BE1-84FC-001902ED0F8F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4B110C75-6F90-4BE1-84FC-001902ED0F8F}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{4B110C75-6F90-4BE1-84FC-001902ED0F8F}.Debug|x64.Build.0 = Debug|Any CPU
+		{4B110C75-6F90-4BE1-84FC-001902ED0F8F}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{4B110C75-6F90-4BE1-84FC-001902ED0F8F}.Debug|x86.Build.0 = Debug|Any CPU
+		{4B110C75-6F90-4BE1-84FC-001902ED0F8F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4B110C75-6F90-4BE1-84FC-001902ED0F8F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{4B110C75-6F90-4BE1-84FC-001902ED0F8F}.Release|x64.ActiveCfg = Release|Any CPU
+		{4B110C75-6F90-4BE1-84FC-001902ED0F8F}.Release|x64.Build.0 = Release|Any CPU
+		{4B110C75-6F90-4BE1-84FC-001902ED0F8F}.Release|x86.ActiveCfg = Release|Any CPU
+		{4B110C75-6F90-4BE1-84FC-001902ED0F8F}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -172,5 +186,6 @@ Global
 		{81005C80-097D-42CA-B31B-A372D22E6B42} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{5DDCEF13-7AC8-4291-9E18-AE47DD265AC1} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 		{5538CFD7-2520-4766-90F7-7A557A43A029} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
+		{4B110C75-6F90-4BE1-84FC-001902ED0F8F} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 	EndGlobalSection
 EndGlobal
