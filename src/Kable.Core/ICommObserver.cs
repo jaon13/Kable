@@ -16,11 +16,22 @@ public enum PacketDirection
     Rx
 }
 
+public enum LogLevel
+{
+    Trace = 0,
+    Debug = 1,
+    Information = 2,
+    Warning = 3,
+    Error = 4,
+    Critical = 5
+}
+
 public readonly struct PacketTraceRecord
 {
     public DateTime TimestampUtc { get; }
     public PacketDirection Direction { get; }
     public TrafficKind Kind { get; }
+    public LogLevel Level { get; }
     public string Tag { get; }
     public ReadOnlyMemory<byte> RawBytes { get; }
     public string? ParsedText { get; }
@@ -33,11 +44,13 @@ public readonly struct PacketTraceRecord
         string tag,
         ReadOnlyMemory<byte> rawBytes,
         string? parsedText,
-        TimeSpan latency)
+        TimeSpan latency,
+        LogLevel level = LogLevel.Information)
     {
         TimestampUtc = timestampUtc;
         Direction = direction;
         Kind = kind;
+        Level = level;
         Tag = tag;
         RawBytes = rawBytes;
         ParsedText = parsedText;

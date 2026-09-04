@@ -36,7 +36,7 @@ public sealed class TcpConnectionContext : IConnectionContext
         if (Interlocked.Exchange(ref _isDisposed, 1) == 0)
         {
             _cts.Cancel();
-            try { _socket.Shutdown(SocketShutdown.Both); } catch { }
+            try { _socket.Shutdown(SocketShutdown.Both); } catch (Exception) { /* Socket already aborted or forcibly disconnected by remote host */ }
             _socket.Close();
         }
     }
@@ -46,8 +46,8 @@ public sealed class TcpConnectionContext : IConnectionContext
         if (Interlocked.Exchange(ref _isDisposed, 1) == 0)
         {
             _cts.Cancel();
-            try { await Input.CompleteAsync().ConfigureAwait(false); } catch { }
-            try { await Output.CompleteAsync().ConfigureAwait(false); } catch { }
+            try { await Input.CompleteAsync().ConfigureAwait(false); } catch (Exception) { /* Pipeline reader already completed */ }
+            try { await Output.CompleteAsync().ConfigureAwait(false); } catch (Exception) { /* Pipeline writer already completed */ }
 #if NETSTANDARD2_0
             _stream.Dispose();
 #else

@@ -34,7 +34,7 @@ public sealed class IpcNamedPipeConnectionContext : IConnectionContext
         if (Interlocked.Exchange(ref _isDisposed, 1) == 0)
         {
             _cts.Cancel();
-            try { _pipeStream.Close(); } catch { }
+            try { _pipeStream.Close(); } catch (Exception) { /* Stream already closed or pipe broken by remote process */ }
         }
     }
 
@@ -43,8 +43,8 @@ public sealed class IpcNamedPipeConnectionContext : IConnectionContext
         if (Interlocked.Exchange(ref _isDisposed, 1) == 0)
         {
             _cts.Cancel();
-            try { await Input.CompleteAsync().ConfigureAwait(false); } catch { }
-            try { await Output.CompleteAsync().ConfigureAwait(false); } catch { }
+            try { await Input.CompleteAsync().ConfigureAwait(false); } catch (Exception) { /* PipeReader already completed */ }
+            try { await Output.CompleteAsync().ConfigureAwait(false); } catch (Exception) { /* PipeWriter already completed */ }
 #if NETSTANDARD2_0
             _pipeStream.Dispose();
 #else
@@ -125,7 +125,7 @@ public sealed class IpcNamedPipeServerListener : IConnectionListener
     public void Stop()
     {
         _cts.Cancel();
-        try { _currentServerStream?.Close(); } catch { }
+        try { _currentServerStream?.Close(); } catch (Exception) { /* Stream already closed */ }
     }
 
     public async ValueTask DisposeAsync()
@@ -141,7 +141,7 @@ public sealed class IpcNamedPipeServerListener : IConnectionListener
                 await _currentServerStream.DisposeAsync().ConfigureAwait(false);
 #endif
             }
-            catch { }
+            catch (Exception) { /* Stream already disposed */ }
         }
         _cts.Dispose();
     }

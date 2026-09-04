@@ -34,7 +34,7 @@ public sealed class NamedPipeConnectionContext : IConnectionContext
         if (Interlocked.Exchange(ref _isDisposed, 1) == 0)
         {
             _cts.Cancel();
-            try { _pipeStream.Close(); } catch { }
+            try { _pipeStream.Close(); } catch (Exception) { /* Pipe stream already broken or disconnected */ }
         }
     }
 
@@ -43,8 +43,8 @@ public sealed class NamedPipeConnectionContext : IConnectionContext
         if (Interlocked.Exchange(ref _isDisposed, 1) == 0)
         {
             _cts.Cancel();
-            try { await Input.CompleteAsync().ConfigureAwait(false); } catch { }
-            try { await Output.CompleteAsync().ConfigureAwait(false); } catch { }
+            try { await Input.CompleteAsync().ConfigureAwait(false); } catch (Exception) { /* Pipeline reader already completed */ }
+            try { await Output.CompleteAsync().ConfigureAwait(false); } catch (Exception) { /* Pipeline writer already completed */ }
 #if NETSTANDARD2_0
             _pipeStream.Dispose();
 #else

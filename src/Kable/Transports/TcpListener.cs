@@ -44,7 +44,7 @@ public sealed class TcpConnectionListener : IConnectionListener
     {
         if (Interlocked.Exchange(ref _isStopped, 1) == 0)
         {
-            try { _listenSocket.Close(); } catch { }
+            try { _listenSocket.Close(); } catch (Exception) { /* Socket already closed */ }
         }
     }
 

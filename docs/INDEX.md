@@ -61,8 +61,9 @@
 - **[06. PerkinElmer Implementation Code](file:///d:/Johnny/Kable/docs/05_ICP_MS_CASE_STUDY/06_PERKINELMER_IMPLEMENTATION.md)**: Driver source code and IPC configuration.
 
 ### 6. [06. Test Engineering & QA Master Plan](file:///d:/Johnny/Kable/docs/qa_test_engineering/INDEX.md)
-- **[01. Gap Analysis](file:///d:/Johnny/Kable/docs/qa_test_engineering/01_GAP_ANALYSIS.md)**: Baseline audit and 6 critical dead zones identified.
-- **[02. Codec & Framing Tests](file:///d:/Johnny/Kable/docs/qa_test_engineering/02_CODEC_AND_FRAMING_TESTS.md)**: OOM defense, 1-byte sliding windows, ArrayPool integrity.
-- **[03. Session Concurrency Tests](file:///d:/Johnny/Kable/docs/qa_test_engineering/03_SESSION_CONCURRENCY_TESTS.md)**: Concurrent FIFO fairness, phantom response routing, fail-fast aborts.
-- **[04. Transport Fault Injection Tests](file:///d:/Johnny/Kable/docs/qa_test_engineering/04_TRANSPORT_FAULT_INJECTION_TESTS.md)**: TCP RST injection, NamedPipe broken pipes, SerialPort cable removals.
-- **[05. All New Test Cases Catalog](file:///d:/Johnny/Kable/docs/qa_test_engineering/05_ALL_NEW_TEST_CASES_CATALOG.md)**: Comprehensive 24-scenario test catalog matrix.
+- **[01. Gap Analysis](file:///d:/Johnny/Kable/docs/qa_test_engineering/01_GAP_ANALYSIS.md)**: Current coverage audit (110 tests) and critical vulnerability gap analysis.
+- **[02. Transport Layer Test Spec](file:///d:/Johnny/Kable/docs/qa_test_engineering/02_TRANSPORT_TEST_SPEC.md)**: TCP, NamedPipe, SerialPort, and IPC daemon fault specifications.
+- **[03. Codec & Framing Test Spec](file:///d:/Johnny/Kable/docs/qa_test_engineering/03_CODEC_TEST_SPEC.md)**: Null-byte handling, OOM defense, and corrupted frame skipping specifications.
+- **[04. Engine Layer Test Spec](file:///d:/Johnny/Kable/docs/qa_test_engineering/04_ENGINE_TEST_SPEC.md)**: Dispatch queue backpressure, cancellation timing, and disposal contracts.
+- **[05. Roslyn Source Generator Test Spec](file:///d:/Johnny/Kable/docs/qa_test_engineering/05_SOURCE_GENERATOR_TEST_SPEC.md)**: Escaped braces, template edge cases, and class-level command specs.
+- **[06. Observability & Log Level Test Spec](file:///d:/Johnny/Kable/docs/qa_test_engineering/06_OBSERVABILITY_TEST_SPEC.md)**: LogLevel matrix, zero-dependency bridge, and CATCH block telemetry verification.

@@ -40,7 +40,7 @@ public sealed class SerialPortConnectionContext : IConnectionContext
         if (Interlocked.Exchange(ref _isDisposed, 1) == 0)
         {
             _cts.Cancel();
-            try { _port.Close(); } catch { }
+            try { _port.Close(); } catch (Exception) { /* Serial port already closed or physical cable unplugged */ }
         }
     }
 
@@ -49,8 +49,8 @@ public sealed class SerialPortConnectionContext : IConnectionContext
         if (Interlocked.Exchange(ref _isDisposed, 1) == 0)
         {
             _cts.Cancel();
-            try { await Input.CompleteAsync().ConfigureAwait(false); } catch { }
-            try { await Output.CompleteAsync().ConfigureAwait(false); } catch { }
+            try { await Input.CompleteAsync().ConfigureAwait(false); } catch (Exception) { /* Pipeline reader already completed */ }
+            try { await Output.CompleteAsync().ConfigureAwait(false); } catch (Exception) { /* Pipeline writer already completed */ }
             _port.Dispose();
             _cts.Dispose();
         }

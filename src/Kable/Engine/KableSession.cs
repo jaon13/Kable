@@ -81,7 +81,7 @@ public sealed class KableSession<TMessage> : IDeviceSession<TMessage>
 
         _observer?.OnPacketTrace(new PacketTraceRecord(
             DateTime.UtcNow, PacketDirection.Tx, TrafficKind.AperiodicCommand,
-            "SEND", ReadOnlyMemory<byte>.Empty, message?.ToString(), TimeSpan.Zero));
+            "SEND", ReadOnlyMemory<byte>.Empty, message?.ToString(), TimeSpan.Zero, LogLevel.Debug));
     }
 
     public async ValueTask<TResponse> RequestAsync<TResponse>(TMessage request, TimeSpan timeout, CancellationToken ct = default)
@@ -104,6 +104,9 @@ public sealed class KableSession<TMessage> : IDeviceSession<TMessage>
                 }
                 catch (Exception ex) when (ex is System.IO.IOException or System.Net.Sockets.SocketException)
                 {
+                    _observer?.OnPacketTrace(new PacketTraceRecord(
+                        DateTime.UtcNow, PacketDirection.Tx, TrafficKind.SpontaneousAlarm,
+                        "IO_FLUSH_ERROR", ReadOnlyMemory<byte>.Empty, ex.Message, sw.Elapsed, LogLevel.Error));
                     OnConnectionClosed();
                     throw new DeviceDisconnectedException("Hardware connection was lost during data transmission.", ex);
                 }
@@ -120,7 +123,7 @@ public sealed class KableSession<TMessage> : IDeviceSession<TMessage>
                     sw.Stop();
                     _observer?.OnPacketTrace(new PacketTraceRecord(
                         DateTime.UtcNow, PacketDirection.Tx, TrafficKind.AperiodicCommand,
-                        "REQUEST_RESP", ReadOnlyMemory<byte>.Empty, response?.ToString(), sw.Elapsed));
+                        "REQUEST_RESP", ReadOnlyMemory<byte>.Empty, response?.ToString(), sw.Elapsed, LogLevel.Debug));
 
                     if (response is TResponse typedRes) return typedRes;
                     throw new InvalidCastException($"Expected {typeof(TResponse).Name}, received {response?.GetType().Name}");
@@ -128,6 +131,10 @@ public sealed class KableSession<TMessage> : IDeviceSession<TMessage>
 
                 if (timeoutCts.IsCancellationRequested)
                 {
+                    _observer?.OnPacketTrace(new PacketTraceRecord(
+                        DateTime.UtcNow, PacketDirection.Tx, TrafficKind.SpontaneousAlarm,
+                        "DEVICE_TIMEOUT", ReadOnlyMemory<byte>.Empty,
+                        $"Command '{request}' timed out after {timeout.TotalMilliseconds}ms.", sw.Elapsed, LogLevel.Warning));
                     throw new DeviceTimeoutException(request?.ToString() ?? "UnknownCommand", timeout);
                 }
 
@@ -154,6 +161,9 @@ public sealed class KableSession<TMessage> : IDeviceSession<TMessage>
                 }
                 catch (Exception ex) when (ex is System.IO.IOException or System.Net.Sockets.SocketException)
                 {
+                    _observer?.OnPacketTrace(new PacketTraceRecord(
+                        DateTime.UtcNow, PacketDirection.Tx, TrafficKind.SpontaneousAlarm,
+                        "IO_FLUSH_ERROR", ReadOnlyMemory<byte>.Empty, ex.Message, sw.Elapsed, LogLevel.Error));
                     OnConnectionClosed();
                     throw new DeviceDisconnectedException("Hardware connection was lost during data transmission.", ex);
                 }
@@ -167,10 +177,19 @@ public sealed class KableSession<TMessage> : IDeviceSession<TMessage>
                 if (completedTask == responseTask)
                 {
                     var response = await responseTask.ConfigureAwait(false);
+                    sw.Stop();
+                    _observer?.OnPacketTrace(new PacketTraceRecord(
+                        DateTime.UtcNow, PacketDirection.Tx, TrafficKind.AperiodicCommand,
+                        "REQUEST_RESP", ReadOnlyMemory<byte>.Empty, response?.ToString(), sw.Elapsed, LogLevel.Debug));
+
                     if (response is TResponse typedRes) return typedRes;
                     throw new InvalidCastException($"Expected {typeof(TResponse).Name}, received {response?.GetType().Name}");
                 }
 
+                _observer?.OnPacketTrace(new PacketTraceRecord(
+                    DateTime.UtcNow, PacketDirection.Tx, TrafficKind.SpontaneousAlarm,
+                    "DEVICE_TIMEOUT", ReadOnlyMemory<byte>.Empty,
+                    $"Command '{request}' timed out after {timeout.TotalMilliseconds}ms.", sw.Elapsed, LogLevel.Warning));
                 throw new DeviceTimeoutException(request?.ToString() ?? "UnknownCommand", timeout);
             }
             finally
@@ -188,7 +207,7 @@ public sealed class KableSession<TMessage> : IDeviceSession<TMessage>
 
         _observer?.OnPacketTrace(new PacketTraceRecord(
             DateTime.UtcNow, PacketDirection.Tx, TrafficKind.AperiodicCommand,
-            "URGENT_OOB", ReadOnlyMemory<byte>.Empty, urgentMessage?.ToString(), TimeSpan.Zero));
+            "URGENT_OOB", ReadOnlyMemory<byte>.Empty, urgentMessage?.ToString(), TimeSpan.Zero, LogLevel.Critical));
     }
 
     private async Task ReadLoopAsync()
@@ -214,9 +233,16 @@ public sealed class KableSession<TMessage> : IDeviceSession<TMessage>
                 if (result.IsCompleted || result.IsCanceled) break;
             }
         }
-        catch
+        catch (OperationCanceledException)
         {
-            // Terminate loop on disconnection or stream exception
+            // Normal cooperative cancellation - no error log needed
+        }
+        catch (Exception ex)
+        {
+            // Log unexpected read-loop terminations (Socket reset, broken pipe, codec crash)
+            _observer?.OnPacketTrace(new PacketTraceRecord(
+                DateTime.UtcNow, PacketDirection.Rx, TrafficKind.SpontaneousAlarm,
+                "READ_LOOP_FAULT", ReadOnlyMemory<byte>.Empty, $"{ex.GetType().Name}: {ex.Message}", TimeSpan.Zero, LogLevel.Error));
         }
         finally
         {
@@ -234,20 +260,47 @@ public sealed class KableSession<TMessage> : IDeviceSession<TMessage>
             {
                 while (reader.TryRead(out var message))
                 {
-                    DispatchMessage(message);
+                    try
+                    {
+                        DispatchMessage(message);
+                    }
+                    catch (Exception ex)
+                    {
+                        _observer?.OnPacketTrace(new PacketTraceRecord(
+                            DateTime.UtcNow, PacketDirection.Rx, TrafficKind.SpontaneousAlarm,
+                            "DISPATCH_MESSAGE_FAULT", ReadOnlyMemory<byte>.Empty,
+                            $"{ex.GetType().Name}: {ex.Message}", TimeSpan.Zero, LogLevel.Error));
+                    }
                 }
             }
         }
         catch (OperationCanceledException)
         {
-            // Immediate drain on session termination signal
+            // Normal cooperative cancellation - no error log needed
+        }
+        catch (Exception ex)
+        {
+            _observer?.OnPacketTrace(new PacketTraceRecord(
+                DateTime.UtcNow, PacketDirection.Rx, TrafficKind.SpontaneousAlarm,
+                "DISPATCH_LOOP_FAULT", ReadOnlyMemory<byte>.Empty,
+                $"{ex.GetType().Name}: {ex.Message}", TimeSpan.Zero, LogLevel.Error));
         }
         finally
         {
-            // Drain remaining in-flight packets
+            // Drain remaining in-flight packets safely with isolation
             while (reader.TryRead(out var residualMessage))
             {
-                DispatchMessage(residualMessage);
+                try
+                {
+                    DispatchMessage(residualMessage);
+                }
+                catch (Exception ex)
+                {
+                    _observer?.OnPacketTrace(new PacketTraceRecord(
+                        DateTime.UtcNow, PacketDirection.Rx, TrafficKind.SpontaneousAlarm,
+                        "DRAIN_DISPATCH_FAULT", ReadOnlyMemory<byte>.Empty,
+                        $"{ex.GetType().Name}: {ex.Message}", TimeSpan.Zero, LogLevel.Warning));
+                }
             }
         }
     }
